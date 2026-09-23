@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f766e" />
+  <meta name="description" content="واجهة بحث عربية للتصفح السريع لنتائج الإعلانات مع فلاتر للمدينة والسعر والتاريخ." />
+  <title>بحث حراج | Haraj Search</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+  <link rel="apple-touch-icon" href="icons/icon-192.svg" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="28" height="28" role="img"><rect x="2" y="2" width="28" height="28" rx="8" fill="#0f766e"/><circle cx="14" cy="14" r="6" fill="none" stroke="#fff" stroke-width="2.5"/><line x1="18.5" y1="18.5" x2="25" y2="25" stroke="#fbbf24" stroke-width="2.5" stroke-linecap="round"/></svg>
+        </span>
+        <div>
+          <h1>بحث حراج</h1>
+          <p class="subtitle">ابحث بالعربي، وصفّ النتائج على جوالك</p>
+        </div>
+      </div>
+      <button id="installBtn" class="btn btn-ghost" type="button" hidden>
+        ⬇ تثبيت التطبيق
+      </button>
+    </div>
+    <p id="installHint" class="install-hint" hidden>
+      لتثبيته على جوالك: من متصفح كروم اختر ⋮ ثم «إضافة إلى الشاشة الرئيسية».
+    </p>
+  </header>
+
+  <main class="container">
+    <!-- البحث -->
+    <section class="card search-card" aria-labelledby="searchTitle">
+      <h2 id="searchTitle">وش تدور عليه؟</h2>
+
+      <form id="searchForm" autocomplete="off">
+        <label class="field-label" for="queryInput">اكتب طلبك بعربي طبيعي</label>
+        <div class="search-row">
+          <input
+            id="queryInput"
+            name="q"
+            type="search"
+            inputmode="search"
+            placeholder="مثال: كمبيوتر ألعاب أقل من 5000 في الرياض"
+            maxlength="200"
+            required
+          />
+          <button id="searchBtn" class="btn btn-primary" type="submit">بحث</button>
+        </div>
+
+        <fieldset class="mode-group">
+          <legend>طريقة البحث</legend>
+          <label class="chip">
+            <input type="radio" name="mode" value="rule" checked />
+            <span>بدون AI</span>
+            <small>سريع ومستقر</small>
+          </label>
+          <label class="chip">
+            <input type="radio" name="mode" value="ai" />
+            <span>مع AI</span>
+            <small>يحتاج مفتاح API</small>
+          </label>
+        </fieldset>
+
+        <details class="filters" open>
+          <summary>فلاتر اختيارية</summary>
+          <div class="filters-grid">
+            <div class="field">
+              <label for="cityInput">المدينة</label>
+              <input id="cityInput" type="text" placeholder="مثال: الرياض" maxlength="60" />
+            </div>
+            <div class="field">
+              <label for="priceInput">أعلى سعر</label>
+              <input id="priceInput" type="number" inputmode="numeric" min="0" step="1" placeholder="مثال: 5000" />
+            </div>
+            <div class="field">
+              <label for="dateFrom">من تاريخ</label>
+              <input id="dateFrom" type="date" />
+            </div>
+            <div class="field">
+              <label for="dateTo">إلى تاريخ</label>
+              <input id="dateTo" type="date" />
+            </div>
+          </div>
+          <div class="filters-actions">
+            <button type="button" id="clearFilters" class="btn btn-text">مسح الفلاتر</button>
+          </div>
+        </details>
+      </form>
+
+      <div class="status" aria-live="polite">
+        <p id="statusText" class="status-text">جاهز. اكتب طلبك واضغط بحث.</p>
+        <div id="progressWrap" class="progress" hidden>
+          <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <p id="errorText" class="error" role="alert" hidden></p>
+      </div>
+    </section>
+
+    <!-- النتائج -->
+    <section class="card results-card" aria-labelledby="resultsTitle">
+      <div class="results-head">
+        <h2 id="resultsTitle">النتائج</h2>
+        <div class="results-tools">
+          <span id="resultCount" class="count">لا نتائج بعد</span>
+          <div class="view-toggle" role="group" aria-label="طريقة العرض">
+            <button type="button" id="viewCards" class="btn btn-small is-active">بطاقات</button>
+            <button type="button" id="viewTable" class="btn btn-small">جدول</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="emptyState" class="empty">
+        <p>ما فيه نتائج معروضة حالياً.</p>
+        <p class="muted">جرّب تبحث عن «شقة في جدة» أو «كامري أقل من 60000».</p>
+      </div>
+
+      <!-- عرض البطاقات (موبايل أول) -->
+      <div id="cardsView" class="cards"></div>
+
+      <!-- عرض الجدول -->
+      <div id="tableView" class="table-wrap" hidden>
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th scope="col">العنوان</th>
+              <th scope="col">السعر</th>
+              <th scope="col">المدينة</th>
+              <th scope="col">التاريخ</th>
+              <th scope="col">الوصف / المواصفات</th>
+              <th scope="col">الرابط</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card help-card">
+      <h2>كيف تشغّلها؟</h2>
+      <ol>
+        <li>هذه الصفحة تشتغل مباشرة بدون تثبيت، لكن تحتاج الـ Backend شغال عشان تجيب نتائج.</li>
+        <li>شغّل الـ Backend على جهازك: <code>uvicorn server:app --port 8000</code></li>
+        <li>اعرض هذه الصفحة عبر سيرفر محلي: <code>python -m http.server 5173</code> داخل مجلد <code>pwa/</code> ثم افتح <code>http://localhost:5173</code></li>
+        <li>لو فتحت <code>index.html</code> مباشرة بدون سيرفر، البحث يشتغل عادي طالما الـ Backend شغال، لكن التثبيت يحتاج سيرفر محلي + HTTPS أو localhost.</li>
+      </ol>
+      <p class="muted">العنوان الحالي للـ Backend مضبوط على <code>http://localhost:8000/api/search</code>. لو جهازك مختلف عدّله من أعلى ملف <code>app.js</code>.</p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>يعرض أول 10 إعلانات بتفاصيلها — بدون جمع أرقام تواصل، وبدون تحميل صور.</p>
+  </footer>
+
+  <script src="app.js" defer></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('service-worker.js').catch(function () {
+          /* يشتغل بدون service worker عند الفتح المباشر، لا مشكلة */
+        });
+      });
+    }
+  </script>
+</body>
+</html>

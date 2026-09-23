@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from src.ai.ai_parser import AIQueryParser
-from src.config import MODE_AI, MODE_RULE_BASED
-from src.models import SearchQuery
-from src.parsing.rule_based import RuleBasedArabicParser
+from server.src.ai.ai_parser import AIQueryParser
+from server.src.config import MODE_AI, MODE_RULE_BASED
+from server.src.models import SearchQuery
+from server.src.parsing.rule_based import RuleBasedArabicParser
 
 
 class QueryParserService:

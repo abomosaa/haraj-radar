@@ -1,2 +1,5 @@
+# اعتماديات الـ Backend — تُثبَّت من جذر المشروع:
+# pip install -r requirements.txt
 fastapi>=0.115,<1.0
 uvicorn>=0.30,<1.0
+playwright>=1.60.0,<2.0.0

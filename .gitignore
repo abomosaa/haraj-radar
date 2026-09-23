@@ -1,12 +1,6 @@
 .venv/
 __pycache__/
 *.pyc
-results.json
-.venv/
-__pycache__/
-*.pyc
-results.json
-__pycache__/
 *.py[cod]
-.venv/
 results.json
+.opencode/

@@ -1,7 +1,29 @@
-"""FastAPI backend exposing the Haraj search pipeline over HTTP.
+"""Haraj Search — Backend API (FastAPI).
 
-Run from the project root:
+الواجهة الخلفية للمشروع: تستقبل طلبات البحث من واجهة الـ PWA،
+تحلّل النص العربي، تجلب نتائج حراج، ثم تعيدها كـ JSON.
+
+التشغيل من جذر المشروع::
+
+    pip install -r requirements.txt
+    python -m playwright install chromium
     uvicorn server.app:app --port 8000
+
+ثم افتح واجهة الـ PWA (انظر ``pwa/``) على ``http://localhost:5173``.
+
+العقد مع الـ PWA:
+    POST /api/search
+    {
+      "query": "كمبيوتر ألعاب أقل من 5000 في الرياض",
+      "mode": "rule",            // أو "ai" — يتطلب مفتاح API
+      "filters": {
+        "city": "الرياض",        // اختياري
+        "max_price": 5000,        // اختياري
+        "date_from": "2024-01-01",// اختياري بصيغة YYYY-MM-DD
+        "date_to": null
+      },
+      "limit": 10                // عدد الإعلانات التي تُفتح تفاصيلها (1..10)
+    }
 """
 
 from __future__ import annotations
@@ -17,19 +39,29 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from src.ai.ai_parser import AIParserNotConfiguredError
-from src.config import DETAIL_SCRAPE_LIMIT, MODE_AI, MODE_RULE_BASED, RESULTS_JSON_PATH
-from src.models import Listing, SearchQuery, TableFilters
-from src.query_parser import QueryParserService
-from src.utils import coerce_price_to_int
+from server.src.ai.ai_parser import AIParserNotConfiguredError
+from server.src.config import (
+    DETAIL_SCRAPE_LIMIT,
+    MODE_AI,
+    MODE_RULE_BASED,
+)
+from server.src.models import Listing, SearchQuery, TableFilters
+from server.src.query_parser import QueryParserService
+from server.src.utils import coerce_price_to_int
 
 logger = logging.getLogger("haraj-server")
 
+# project_root/results.json — يُقرأ منه endpoint السجلّ فقط.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+RESULTS_JSON_PATH = PROJECT_ROOT / "results.json"
+
+# مهلة البحث الكلية (ثوانٍ) — تُضبط عبر متغير البيئة عند الحاجة.
 SEARCH_TIMEOUT_SECONDS = int(os.getenv("HARAJ_SEARCH_TIMEOUT_SECONDS", "90"))
 MAX_LIMIT = DETAIL_SCRAPE_LIMIT
 
 app = FastAPI(title="Haraj Search API", version="0.2.0")
 
+# CORS مفتوح لأن الـ PWA قد تُستضاف على دومين مختلف عن الـ Backend.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -39,30 +71,63 @@ app.add_middleware(
 )
 
 
-class SearchRequest(BaseModel):
-    query_text: str = Field(min_length=1)
-    mode: str = MODE_RULE_BASED
+class SearchFilters(BaseModel):
+    """فلاتر اختيارية تُطبَّق فوق نتيجة تحليل النص."""
+
     city: str | None = None
     max_price: int | None = None
-    limit: int = 10
+    date_from: str | None = None
+    date_to: str | None = None
+
+
+class SearchRequest(BaseModel):
+    """طلب البحث كما ترسله الـ PWA (pwa/app.js).
+
+    ``query_text`` و``city``/``max_price`` المسطّحة مدعومة للتوافق
+    مع عملاء قدامى، لكن الشكل المعتمد هو ``query`` + ``filters``.
+    """
+
+    query: str | None = None
+    query_text: str | None = None
+    mode: str = "rule"
+    filters: SearchFilters = Field(default_factory=SearchFilters)
+    city: str | None = None
+    max_price: int | None = None
+    limit: int = MAX_LIMIT
 
 
 def _playwright_available() -> bool:
     """True when the Playwright package can be imported later on demand."""
-
     return importlib.util.find_spec("playwright") is not None
 
 
 def _resolve_mode_label(mode: str) -> str:
+    """Map PWA mode values (rule/ai) to parser mode labels."""
     normalized = (mode or "").strip().lower()
     if normalized in {"ai", "مع ai", "معai"}:
         return MODE_AI
     return MODE_RULE_BASED
 
 
+def _resolve_query_text(body: SearchRequest) -> str:
+    """Accept both ``query`` (canonical) and legacy ``query_text``."""
+    return ((body.query or body.query_text) or "").strip()
+
+
+def _resolve_filters(body: SearchRequest) -> SearchFilters:
+    """Merge nested ``filters`` with legacy flat fields (nested wins)."""
+    return SearchFilters(
+        city=body.filters.city or body.city,
+        max_price=body.filters.max_price
+        if body.filters.max_price is not None
+        else body.max_price,
+        date_from=body.filters.date_from,
+        date_to=body.filters.date_to,
+    )
+
+
 def _listing_to_payload(item: Listing) -> dict[str, object]:
     """Serialize a Listing with an extra numeric price_value field."""
-
     return {
         "title": item.title,
         "price": item.price,
@@ -89,12 +154,14 @@ def _ignore_progress(message: str) -> None:
 
 @app.get("/health")
 def health() -> dict[str, bool]:
+    """فحص حياة بسيط للمراقبة ولبدء التشغيل."""
     return {"ok": True}
 
 
 @app.post("/api/search")
 async def api_search(body: SearchRequest) -> dict[str, object]:
-    query_text = (body.query_text or "").strip()
+    """نقطة البحث الرئيسية: حلّل النص، اجلب النتائج، طبّق الفلاتر، أعد JSON."""
+    query_text = _resolve_query_text(body)
     if not query_text:
         raise HTTPException(status_code=422, detail="اكتب كلمة البحث أولاً.")
 
@@ -105,11 +172,16 @@ async def api_search(body: SearchRequest) -> dict[str, object]:
         parser = QueryParserService()
         parsed = parser.parse(query_text, mode_label)
     except AIParserNotConfiguredError:
+        # نعيد 200 مع رسالة بالإنجليزية يلتقطها الـ PWA ليعرض تلميح AI.
+        # (نص الرسالة مقصود بالإنجليزية ليتوافق مع كشف pwa/app.js)
         logger.warning("AI mode requested but not configured")
-        raise HTTPException(
-            status_code=400,
-            detail="وضع AI غير مهيأ بعد. أضف مفتاح API في الإعدادات، أو جرّب وضع «بدون AI».",
-        ) from None
+        return {
+            "query": query_text,
+            "parsed": {"keyword": query_text, "city": None, "max_price": None},
+            "listings": [],
+            "count": 0,
+            "message": "AI mode is not configured yet. Add your API key in settings.",
+        }
     except Exception:  # noqa: BLE001
         logger.exception("query parsing failed")
         raise HTTPException(
@@ -125,7 +197,7 @@ async def api_search(body: SearchRequest) -> dict[str, object]:
         )
 
     try:
-        from src.scraper import scrape_search_results
+        from server.src.scraper import scrape_search_results
     except Exception:  # noqa: BLE001
         logger.exception("scraper import failed")
         raise HTTPException(
@@ -161,8 +233,15 @@ async def api_search(body: SearchRequest) -> dict[str, object]:
             detail="حدث خطأ غير متوقع أثناء جلب النتائج. حاول مرة أخرى.",
         ) from None
 
-    request_filters = TableFilters(city=body.city, max_price=body.max_price)
-    from src.search_service import filter_listings
+    filters = _resolve_filters(body)
+    request_filters = TableFilters(
+        keyword=None,
+        city=filters.city,
+        max_price=filters.max_price,
+        date_from=filters.date_from,
+        date_to=filters.date_to,
+    )
+    from server.src.search_service import filter_listings
 
     filtered = filter_listings(listings, parsed, request_filters)
 
@@ -177,8 +256,7 @@ async def api_search(body: SearchRequest) -> dict[str, object]:
 @app.get("/api/history")
 def api_history() -> dict[str, object]:
     """Return previously persisted results from results.json when present."""
-
-    output_path = Path(RESULTS_JSON_PATH)
+    output_path = RESULTS_JSON_PATH
     if not output_path.exists():
         return {"items": [], "count": 0, "message": "لا يوجد ملف نتائج محفوظ بعد."}
 

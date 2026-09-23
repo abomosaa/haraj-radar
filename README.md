@@ -1,114 +1,142 @@
-# Haraj Desktop Search
+# بحث حراج — Haraj Search (PWA + Backend)
 
-Python 3.12 desktop application that uses async Playwright + PySide6 to search Haraj through an RTL table interface.
+تطبيق بحث في إعلانات حراج بواجهة عربية (RTL) تعمل على الجوال والديسكتوب.
+يتكوّن المشروع من طرفين فقط:
 
-## How to Run
+- **`server/`** — الواجهة الخلفية (FastAPI + سكرابر Playwright) تعمل على الخادم.
+- **`pwa/`** — واجهة الويب والتطبيق التقدمي (PWA) التي تتثبت من المتصفح بزر «إضافة إلى الشاشة الرئيسية».
 
-- Install dependencies:
+> ملاحظة: تم إسقاط واجهة PySide6 المكتبية نهائياً (`main.py` و`run_gui.*` ومجلد `src/gui` حُذفت).
+> السكرابر يعيش على الخادم فقط — لا يُشحَن أي متصفح مع الجوال.
 
-```powershell
-python -m pip install -r requirements.txt
-python -m playwright install chromium
+## هيكلية المجلدات
+
+```text
+scrapper/
+├── server/                 # الـ Backend (يعمل بـ: uvicorn server.app:app)
+│   ├── app.py              # تطبيق FastAPI: ‏/health‏ و‎/api/search‎ و‎/api/history‎
+│   ├── requirements.txt    # اعتماديات الخادم (fastapi + uvicorn + playwright)
+│   └── src/                # منطق البحث والسكرابر (منقول من src/ القديم)
+│       ├── scraper.py      # جلب صفحة البحث + تفاصيل أول 10 إعلانات (Playwright)
+│       ├── extractors.py   # بناء كائنات Listing من البيانات الخام
+│       ├── search_service.py # فلترة النتائج (مدينة/سعر/تاريخ)
+│       ├── query_parser.py # توجيه التحليل: قواعدي أو AI
+│       ├── parsing/        # المحلل القواعدي العربي + الواجهات
+│       ├── ai/             # محلل AI (يحتاج HARAJ_AI_API_KEY) + إعداداته
+│       ├── models.py       # Listing / SearchQuery / TableFilters
+│       ├── utils.py        # أسعار/تواريخ/كتابة JSON
+│       └── config.py       # الثوابت: الروابط، المحددات، الحدود
+├── pwa/                    # الواجهة والتطبيق التقدمي
+│   ├── index.html          # الصفحة (lang=ar dir=rtl): بحث + فلاتر + نتائج
+│   ├── app.js              # منطق الواجهة: ينادي API ويعرض النتائج
+│   ├── styles.css          # تصميم موبايل-أول (بطاقات + جدول)
+│   ├── manifest.json       # بيانات التثبيت (الاسم، الأيقونات، standalone)
+│   ├── service-worker.js   # تخزين الملفات المحلية فقط (طلبات API لا تُخزَّن)
+│   └── icons/              # أيقونات SVG (حوّلها لـ PNG 192/512 عند رفع Play)
+├── requirements.txt        # نفس اعتماديات الخادم (للتثبيت من الجذر)
+├── results.json            # ناتج اختياري قديم (مهجور، لا يُتتبَّع في Git)
+└── .gitignore              # .venv/ + ‎__pycache__‎ + results.json + .opencode/
 ```
 
-- Run the GUI:
+## تشغيل الـ Backend
+
+المتطلب: Python 3.12 (الـ `.venv` الحالي مكسور — أعد إنشاءه كما below).
 
 ```powershell
-python main.py
-```
-
-- Optional launcher scripts:
-    - `run_gui.bat`
-    - `run_gui.ps1`
-
-If `.venv` is missing, run:
-
-```powershell
+# 1) إنشاء البيئة (احذف .venv القديم أولاً إن وجد)
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\playwright.exe install chromium
+
+# 2) التشغيل من جذر المشروع
+.\.venv\Scripts\uvicorn.exe server.app:app --port 8000
+
+# 3) تحقق
+# افتح http://localhost:8000/health → {"ok": true}
 ```
 
-## Search Modes
+متغيرات البيئة الاختيارية:
 
-- `بدون AI`:
-    - Uses the local rule-based Arabic parser.
-    - Fully supported and stable.
+| المتغير | الافتراضي | الوظيفة |
+|---|---|---|
+| `HARAJ_AI_API_KEY` | فارغ | تفعيل وضع «مع AI» (بدونه يرد API برسالة تهيئة) |
+| `HARAJ_SEARCH_TIMEOUT_SECONDS` | `90` | مهلة البحث الكلية بالثواني |
 
-- `مع AI`:
-    - Integration path is prepared in `src/ai/`.
-    - If no API key is configured, the app shows:
-        - `AI mode is not configured yet. Add your API key in settings.`
-    - Current behavior does not break non-AI mode.
+## تشغيل الـ PWA ومعاينتها
 
-## What Gets Scraped
+الـ PWA صفحة ستاتيكية تتصل بالـ Backend — تحتاج الاثنين شغالَين معاً:
 
-- Search page results are collected first.
-- Then the app opens listing detail pages for the first `10` results only.
-- Extracted fields:
-    - `العنوان`
-    - `السعر`
-    - `المدينة`
-    - `التاريخ`
-    - `الوصف / المواصفات`
-    - `الرابط`
-- Safety constraints:
-    - No phone number collection.
-    - No chat/contact interactions.
-    - No seller interactions.
-    - No image downloads.
-    - Respectful delay between listing visits.
+```powershell
+# نافذة 1: الـ Backend (من الجذر)
+.\.venv\Scripts\uvicorn.exe server.app:app --port 8000
 
-## Run
+# نافذة 2: سيرفر ستاتيكي للـ PWA (من داخل pwa/)
+Set-Location pwa
+..\.venv\Scripts\python.exe -m http.server 5173
+# افتح http://localhost:5173
+```
 
-Type your request in natural Arabic, for example:
+- **التثبيت من المتصفح:** في كروم على الجوال اختر ⋮ ثم «إضافة إلى الشاشة الرئيسية» — يظهر زر «تثبيت التطبيق» تلقائياً عندما يعرض المتصفح `beforeinstallprompt`.
+- فتح `index.html` مباشرة يعمل للبحث (طالما الـ Backend شغال)، لكن prompt التثبيت يحتاج `localhost` أو `HTTPS`.
+- عنوان الـ Backend مضبوط في أعلى `pwa/app.js` (`API_URL`) — غيّره لرابط خادمك عند النشر.
 
-`أبغى كمبيوتر ألعاب أقل من 5000`
-
-Results appear in a sortable table with a `فتح الإعلان` button per row.
-
-## Features
-
-- Two modes: `بدون AI` and `مع AI`
-- RTL-friendly table view (no raw long URLs shown)
-- Clickable `فتح الإعلان` action opens system browser
-- Sort by `السعر` and `التاريخ` by clicking headers
-- Optional filters above table: keyword, city, max price, date range
-- Rule-based Arabic parser isolation for future AI upgrade
-- Saves displayed dataset to `results.json`
-
-## Project Structure
+## كيف يعمل التطبيق (PWA ↔ Backend)
 
 ```text
-.
-|-- main.py
-|-- requirements.txt
-|-- README.md
-|-- run_gui.bat
-|-- run_gui.ps1
-`-- src
-    |-- query_parser.py
-    |-- ai
-    |   |-- ai_parser.py
-    |   `-- config.py
-    |-- config.py
-    |-- extractors.py
-    |-- gui
-    |   |-- main_window.py
-    |   |-- results_table.py
-    |   `-- worker_thread.py
-    |-- models.py
-    |-- parsing
-    |   |-- interfaces.py
-    |   `-- rule_based.py
-    |-- scraper.py
-    |-- search_service.py
-    `-- utils.py
+المستخدم يكتب «كمبيوتر ألعاب أقل من 5000 في الرياض»
+        │  pwa/app.js: POST /api/search {query, mode, filters}
+        ▼
+server/app.py
+  ├─ QueryParserService: استخراج {keyword, city, max_price}
+  ├─ scrape_search_results: صفحة البحث أولاً، ثم تفاصيل أول 10 إعلانات
+  │   (حظر الصور/الفيديو، فاصل مهذب بين الطلبات، بدون أرقام تواصل)
+  ├─ filter_listings: تطبيق فلاتر المدينة/السعر/التاريخ
+        │  {query, parsed, listings[{title,price,price_value,city,date,description,url}], count}
+        ▼
+pwa/app.js: بطاقات (موبايل) أو جدول + زر «فتح الإعلان» يفتح الرابط في المتصفح
 ```
 
-## Notes for Extension
+مثال طلب:
 
-- Parser orchestration is centralized in `src/query_parser.py`.
-- AI parser/config stubs are in `src/ai/` for future model wiring.
-- Haraj selectors and scraper pacing remain centralized in `src/config.py`.
-- If Haraj changes its markup, adjust selectors in `src/config.py` before changing the scraper flow.
+```json
+POST http://localhost:8000/api/search
+{
+  "query": "كمبيوتر ألعاب أقل من 5000 في الرياض",
+  "mode": "rule",
+  "filters": { "city": "الرياض", "max_price": 5000, "date_from": null, "date_to": null },
+  "limit": 10
+}
+```
+
+مثال رد:
+
+```json
+{
+  "query": "كمبيوتر ألعاب أقل من 5000 في الرياض",
+  "parsed": { "keyword": "كمبيوتر ألعاب", "city": "الرياض", "max_price": 5000 },
+  "listings": [
+    {
+      "title": "كمبيوتر ألعاب ...",
+      "price": "4500 ريال",
+      "price_value": 4500,
+      "city": "الرياض",
+      "date": "2024-05-01",
+      "description": "...",
+      "url": "https://haraj.com.sa/..."
+    }
+  ],
+  "count": 1
+}
+```
+
+## النشر على سوق اندرويد (اختياري)
+
+1. انشر الـ Backend على سيرفر (`VPS`/`Render`/`Fly` مع Docker) وحدّث `API_URL` في `pwa/app.js`.
+2. انشر `pwa/` على استضافة `HTTPS` (GitHub Pages / Netlify / Vercel).
+3. غلّف رابط الـ PWA عبر `PWABuilder` / `Bubblewrap (TWA)` وارفع الحزمة على Google Play.
+   (حوّل أيقونات `icons/*.svg` إلى `PNG ‏192/512` لأن المتجر يطلبها.)
+
+## قيود السلامة
+
+- أول 10 نتائج فقط تُفتح تفاصيلها.
+- لا جمع لأرقام التواصل، لا رسائل/تفاعل مع البائعين، لا تحميل صور.

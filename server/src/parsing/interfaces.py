@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from src.models import SearchQuery
+from server.src.models import SearchQuery
 
 
 class QueryParser(Protocol):

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import re
 
-from src.config import CITY_PATTERN, DEFAULT_KEYWORD, PRICE_LIMIT_PATTERNS, SEARCH_VERB_PATTERNS
-from src.models import SearchQuery
-from src.utils import coerce_price_to_int
+from server.src.config import CITY_PATTERN, DEFAULT_KEYWORD, PRICE_LIMIT_PATTERNS, SEARCH_VERB_PATTERNS
+from server.src.models import SearchQuery
+from server.src.utils import coerce_price_to_int
 
 
 class RuleBasedArabicParser:

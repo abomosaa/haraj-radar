@@ -18,11 +18,7 @@ const errorText = document.getElementById('errorText');
 const progressWrap = document.getElementById('progressWrap');
 const resultCount = document.getElementById('resultCount');
 const emptyState = document.getElementById('emptyState');
-const cardsView = document.getElementById('cardsView');
-const tableView = document.getElementById('tableView');
 const resultsBody = document.getElementById('resultsBody');
-const viewCardsBtn = document.getElementById('viewCards');
-const viewTableBtn = document.getElementById('viewTable');
 
 const installBtn = document.getElementById('installBtn');
 const installHint = document.getElementById('installHint');
@@ -58,18 +54,6 @@ if (window.matchMedia('(display-mode: standalone)').matches) {
   installBtn.hidden = true;
   installHint.hidden = true;
 }
-
-// ---------- تبديل العرض ----------
-function setView(which) {
-  const isCards = which === 'cards';
-  cardsView.hidden = !isCards;
-  tableView.hidden = isCards;
-  viewCardsBtn.classList.toggle('is-active', isCards);
-  viewTableBtn.classList.toggle('is-active', !isCards);
-}
-
-viewCardsBtn.addEventListener('click', () => setView('cards'));
-viewTableBtn.addEventListener('click', () => setView('table'));
 
 // ---------- الحالة ----------
 function setStatus(msg) {
@@ -158,14 +142,12 @@ function normalizeListings(payload) {
   return [];
 }
 
-// ---------- العرض ----------
+// ---------- العرض (جدول فقط) ----------
 function render(listings) {
-  cardsView.innerHTML = '';
   resultsBody.innerHTML = '';
 
   if (!listings.length) {
     emptyState.hidden = false;
-    cardsView.innerHTML = '';
     resultCount.textContent = 'لا توجد نتائج';
     return;
   }
@@ -173,7 +155,6 @@ function render(listings) {
   emptyState.hidden = true;
   resultCount.textContent = listings.length === 1 ? 'نتيجة واحدة' : `${listings.length} نتائج`;
 
-  const fragCards = document.createDocumentFragment();
   const fragRows = document.createDocumentFragment();
 
   listings.forEach((item) => {
@@ -184,22 +165,6 @@ function render(listings) {
     const desc = item.description || '—';
     const url = item.url || '#';
     const safeUrl = typeof url === 'string' && url.startsWith('http') ? url : '#';
-
-    // بطاقة
-    const card = document.createElement('article');
-    card.className = 'ad-card';
-    card.innerHTML = `
-      <h3>${escapeHtml(title)}</h3>
-      <div class="meta">
-        <span class="tag price">${escapeHtml(price)}</span>
-        <span class="tag">${escapeHtml(city)}</span>
-      </div>
-      <p class="desc">${escapeHtml(desc)}</p>
-      <div class="card-foot">
-        <span class="date">${escapeHtml(date)}</span>
-        ${safeUrl !== '#' ? `<a class="btn-open" href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener">فتح الإعلان</a>` : `<span class="date">لا يوجد رابط</span>`}
-      </div>`;
-    fragCards.appendChild(card);
 
     // صف جدول
     const tr = document.createElement('tr');
@@ -214,7 +179,6 @@ function render(listings) {
     fragRows.appendChild(tr);
   });
 
-  cardsView.appendChild(fragCards);
   resultsBody.appendChild(fragRows);
 }
 
@@ -303,4 +267,3 @@ form.addEventListener('submit', async (e) => {
 
 // ---------- بدء ----------
 restoreLastSearch();
-setView('cards');

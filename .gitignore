@@ -4,3 +4,7 @@ __pycache__/
 *.py[cod]
 results.json
 .opencode/
+.sync/
+node_modules/
+express-app/data/
+express-app/test/*.db

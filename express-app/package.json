@@ -1,0 +1,18 @@
+{
+  "name": "haraj-express-scraper",
+  "version": "0.1.0",
+  "description": "Express + Playwright hourly scraper with SQLite history and Web Push",
+  "main": "server.js",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.js",
+    "scrape": "node scraper.js --once",
+    "test": "node --test test/regression.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "node-cron": "^3.0.3",
+    "playwright": "^1.48.0",
+    "web-push": "^3.6.7"
+  }
+}

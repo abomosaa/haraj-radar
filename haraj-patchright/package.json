@@ -1,0 +1,8 @@
+{
+  "name": "haraj-patchright",
+  "version": "0.1.0",
+  "description": "Haraj scraper: Patchright undetected-Chromium fork + live API interception",
+  "engines": { "node": ">=20" },
+  "scripts": { "scrape": "node scrape.js" },
+  "dependencies": { "patchright": "^1.63.0" }
+}

@@ -93,6 +93,8 @@
       hNew: "الجديد",
       hStatus: "الحالة",
       hint: "العناصر الجديدة تظهر مع شارة “جديد” وزر “تمت المشاهدة” لمسحها.",
+      demoNotice: "وضع العرض التجريبي — البيانات عينة وليست حية. شغّل الخادم للنتائج الحقيقية.",
+      demoBlocked: "غير متاح في وضع العرض التجريبي.",
       footerPre: "البيانات من",
       footerPost: "والفحص والسجل يتحدثان من الأزرار أعلاه.",
       notifyUnsupported: "التنبيهات غير مدعومة في هذا المتصفح.",
@@ -184,6 +186,8 @@
       hNew: "New",
       hStatus: "Status",
       hint: "New items show a “New” badge in the title cell with a “Mark seen” button that clears it.",
+      demoNotice: "Demo mode — sample data, not live. Run the server for real results.",
+      demoBlocked: "Unavailable in demo mode.",
       footerPre: "Data comes from",
       footerPost: "Scraping and history update from the buttons above.",
       notifyUnsupported: "Notifications are not supported in this browser.",
@@ -420,7 +424,21 @@
       if (data.citiesByRegion && typeof data.citiesByRegion === "object") meta.citiesByRegion = data.citiesByRegion;
       if (Array.isArray(data.categories)) meta.categories = data.categories;
     } catch (e) {
-      // Keep the fallback locations + empty cities/categories.
+      // No backend (static hosting): fall back to bundled sample data.
+      try {
+        var demoRes = await fetch("./demo-data.json", { headers: { Accept: "application/json" } });
+        if (!demoRes.ok) throw new Error("no demo data");
+        var demo = await demoRes.json();
+        if (!Array.isArray(demo.listings)) throw new Error("bad demo data");
+        DEMO = true;
+        demoItems = demo.listings;
+        demoRuns = Array.isArray(demo.runs) ? demo.runs : [];
+        if (demo.citiesByRegion && typeof demo.citiesByRegion === "object") meta.citiesByRegion = demo.citiesByRegion;
+        if (Array.isArray(demo.categories)) meta.categories = demo.categories;
+        setStatus(t("demoNotice"), "is-ok");
+      } catch (e2) {
+        // Keep the fallback locations + empty cities/categories.
+      }
     }
     refreshMetaTexts();
   }
@@ -467,6 +485,13 @@
   var cachedRuns = [];
   var scrapeBusyLabel = null;
   var notifyBusyLabel = null;
+
+  // Demo mode (static hosting like GitHub Pages): when the API is
+  // unreachable but ./demo-data.json loads, the UI runs fully offline
+  // on sample data. Server actions show a notice instead of failing.
+  var DEMO = false;
+  var demoItems = [];
+  var demoRuns = [];
 
   function setStatus(message, kind) {
     els.status.textContent = message || "";
@@ -548,9 +573,49 @@
     updateCount(visible.length, cachedCount);
   }
 
+  // Demo-mode filtering mirrors the server semantics (simplified):
+  // every word must appear, city/category exact, price strict, dates by range.
+  function demoFilter(items) {
+    var f = getFilters();
+    var words = f.q.split(/[\s،,؛;.]+/).map(function (w) { return w.trim().toLowerCase(); })
+      .filter(function (w) { return w.length >= 2; });
+    return items.filter(function (it) {
+      if (words.length) {
+        var hay = ((it.title || "") + " " + (it.description || "")).toLowerCase();
+        for (var i = 0; i < words.length; i++) {
+          if (hay.indexOf(words[i]) === -1) return false;
+        }
+      }
+      if (f.city && it.city !== f.city) return false;
+      if (f.category && it.category !== f.category) return false;
+      if (f.maxPrice !== "") {
+        var mp = Number(f.maxPrice);
+        if (Number.isFinite(mp) && it.price_value != null && it.price_value > mp) return false;
+      }
+      if (f.from && (it.date || "") < f.from) return false;
+      if (f.to && (it.date || "") > f.to) return false;
+      if (f.newOnly && !it.is_new) return false;
+      if (f.location) {
+        var loc = findLocation(f.location);
+        if (!loc || loc.type === "gcc") return false;
+        var name = lang === "ar" ? (loc.ar || "") : (loc.en || loc.ar || "");
+        if (!it.region || (it.region.indexOf(name) === -1 && name.indexOf(it.region) === -1)) return false;
+      }
+      return true;
+    }).slice(0, 20);
+  }
+
   // --- Load and render listings: GET /api/listings ---
 
   async function loadListings() {
+    if (DEMO) {
+      var filtered = demoFilter(demoItems);
+      cachedListings = filtered;
+      cachedCount = filtered.length;
+      applyTableFilter();
+      setStatus(filtered.length === 0 ? t("statusEmpty") : t("demoNotice"), filtered.length === 0 ? "" : "is-ok");
+      return;
+    }
     setStatus(t("loading"));
     try {
       var res = await fetch(buildListingsUrl(), { headers: { Accept: "application/json" } });
@@ -653,6 +718,13 @@
 
   async function markSeen(ids, row, button) {
     if (!ids.length) return;
+    if (DEMO) {
+      // No backend: just clear the badge locally for this session.
+      row.classList.remove("is-new");
+      var metaEl = row.querySelector(".cell-meta");
+      if (metaEl) metaEl.remove();
+      return;
+    }
     button.disabled = true;
     button.textContent = t("savingBtn");
     try {
@@ -677,6 +749,11 @@
 
   async function scrapeNow() {
     if (els.scrapeBtn.disabled) return;
+    if (DEMO) {
+      setStatus(t("demoBlocked"), "is-error");
+      await loadListings();
+      return;
+    }
     var activeKeyword = els.q.value.trim();
     scrapeBusyLabel = els.scrapeBtn.textContent;
     els.scrapeBtn.disabled = true;
@@ -718,6 +795,12 @@
   // --- Last runs: GET /api/history ---
 
   async function loadHistory() {
+    if (DEMO) {
+      cachedRuns = demoRuns.slice();
+      renderHistory(cachedRuns);
+      setHistoryStatus(cachedRuns.length ? "" : t("historyEmpty"));
+      return;
+    }
     setHistoryStatus(t("historyLoading"));
     try {
       var res = await fetch("/api/history", { headers: { Accept: "application/json" } });
@@ -787,6 +870,10 @@
   // create its own worker file — if none is found it shows a plain message.
 
   async function enableNotifications() {
+    if (DEMO) {
+      setStatus(t("demoBlocked"), "is-error");
+      return;
+    }
     if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
       setStatus(t("notifyUnsupported"), "is-error");
       return;
@@ -954,13 +1041,13 @@
     applyLang(lang === "ar" ? "en" : "ar");
   });
 
-  // First paint.
+  // First paint. Meta first so DEMO is settled before listings/history load.
   applyLang(lang);
   updateDateVisibility();
   loadMeta().then(function () {
     // Meta arrived (or fallback kept): keep any preset dates in sync.
     applyTimeframe(els.timeframe.value);
     loadListings();
+    loadHistory();
   });
-  loadHistory();
 })();

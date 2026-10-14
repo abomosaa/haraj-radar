@@ -1,0 +1,176 @@
+{
+  "citiesByRegion": {
+    "SA-Riyadh": ["الرياض", "الخرج"],
+    "SA-Makkah": ["جدة", "مكة"],
+    "SA-Eastern": ["الدمام", "الخبر"]
+  },
+  "categories": ["سيارات", "عقار", "أجهزة", "أثاث"],
+  "runs": [
+    {
+      "started_at": "2026-10-14T08:00:00.000Z",
+      "finished_at": "2026-10-14T08:00:21.000Z",
+      "keyword": "demo",
+      "found": 12,
+      "added_new": 3,
+      "status": "ok"
+    }
+  ],
+  "listings": [
+    {
+      "id": 1,
+      "url": "https://haraj.com.sa/11189251036/",
+      "title": "غسالة صحون LG شبه جديدة مع الضمان",
+      "price": "1,200 ريال",
+      "price_value": 1200,
+      "city": "المدينة",
+      "region": "منطقة المدينة المنورة",
+      "date": "2026-10-13",
+      "category": "أجهزة",
+      "description": "غسالة صحون LG سمارت 15 فرد آخر إصدار شبه جديدة مع كرت الضمان",
+      "is_new": true
+    },
+    {
+      "id": 2,
+      "url": "https://haraj.com.sa/11189235245/",
+      "title": "كمبيوتر ألعاب RTX 3090 - 24GB",
+      "price": "7,500 ريال",
+      "price_value": 7500,
+      "city": "الرياض",
+      "region": "منطقة الرياض",
+      "date": "2026-10-12",
+      "category": "أجهزة",
+      "description": "جهاز ألعاب بكرت RTX 3090 ومعالج i9 ورام 32GB",
+      "is_new": true
+    },
+    {
+      "id": 3,
+      "url": "https://haraj.com.sa/11189113343/",
+      "title": "PC Gaming كمبيوتر العاب i5 مع شاشة",
+      "price": "3,400 ريال",
+      "price_value": 3400,
+      "city": "جدة",
+      "region": "منطقة مكة المكرمة",
+      "date": "2026-10-11",
+      "category": "أجهزة",
+      "description": "كمبيوتر ألعاب i5 مع كرت 5060 وشاشة 24 بوصة",
+      "is_new": true
+    },
+    {
+      "id": 4,
+      "url": "https://haraj.com.sa/11189159467/",
+      "title": "شقة للايجار في حي العليا",
+      "price": "1,500 ريال",
+      "price_value": 1500,
+      "city": "الخبر",
+      "region": "المنطقة الشرقية",
+      "date": "2026-10-10",
+      "category": "عقار",
+      "description": "شقة عزاب مؤثثة لشخص واحد في حي العليا بالخبر",
+      "is_new": false
+    },
+    {
+      "id": 5,
+      "url": "https://haraj.com.sa/11188914800/",
+      "title": "لابتوب Alienware Aurora R8 للألعاب",
+      "price": "1,800 ريال",
+      "price_value": 1800,
+      "city": "الرياض",
+      "region": "منطقة الرياض",
+      "date": "2026-10-09",
+      "category": "أجهزة",
+      "description": "لابتوب ألعاب مكتبي Alienware بحالة ممتازة",
+      "is_new": false
+    },
+    {
+      "id": 6,
+      "url": "https://haraj.com.sa/11188992980/",
+      "title": "كنب مجلس عربي 4 قطع",
+      "price": "2,000 ريال",
+      "price_value": 2000,
+      "city": "الدمام",
+      "region": "المنطقة الشرقية",
+      "date": "2026-10-08",
+      "category": "أثاث",
+      "description": "كنب مجلس عربي نظيف 4 قطع مع الطاولات",
+      "is_new": false
+    },
+    {
+      "id": 7,
+      "url": "https://haraj.com.sa/11188954521/",
+      "title": "كمبيوتر مونتاج i7 مع كيس NZXT",
+      "price": "1,200 ريال",
+      "price_value": 1200,
+      "city": "مكة",
+      "region": "منطقة مكة المكرمة",
+      "date": "2026-10-05",
+      "category": "أجهزة",
+      "description": "جهاز مونتاج بمعالج i7 وكرت GTX 1060",
+      "is_new": false
+    },
+    {
+      "id": 8,
+      "url": "https://haraj.com.sa/11188744364/",
+      "title": "شاشة ألعاب 144Hz مع كمبيوتر PC Gaming",
+      "price": "2,000 ريال",
+      "price_value": 2000,
+      "city": "الخرج",
+      "region": "منطقة الرياض",
+      "date": "2026-10-02",
+      "category": "أجهزة",
+      "description": "كمبيوتر PC Gaming مع شاشة بتردد 144",
+      "is_new": false
+    },
+    {
+      "id": 9,
+      "url": "https://haraj.com.sa/11188093067/",
+      "title": "طاولة طعام خشب 6 كراسي",
+      "price": "900 ريال",
+      "price_value": 900,
+      "city": "جدة",
+      "region": "منطقة مكة المكرمة",
+      "date": "2026-09-28",
+      "category": "أثاث",
+      "description": "طاولة سفرة خشب فاخر مع 6 كراسي",
+      "is_new": false
+    },
+    {
+      "id": 10,
+      "url": "https://haraj.com.sa/11185430306/",
+      "title": "كامري 2020 فل كامل",
+      "price": "62,000 ريال",
+      "price_value": 62000,
+      "city": "الرياض",
+      "region": "منطقة الرياض",
+      "date": "2026-09-20",
+      "category": "سيارات",
+      "description": "تويوتا كامري موديل 2020 فل كامل مالك أول",
+      "is_new": false
+    },
+    {
+      "id": 11,
+      "url": "https://haraj.com.sa/11188969680/",
+      "title": "هايلوكس غمارتين ديزل 2019",
+      "price": "58,000 ريال",
+      "price_value": 58000,
+      "city": "الخبر",
+      "region": "المنطقة الشرقية",
+      "date": "2026-09-15",
+      "category": "سيارات",
+      "description": "تويوتا هايلوكس غمارتين ديزل استخدام شخصي",
+      "is_new": false
+    },
+    {
+      "id": 12,
+      "url": "https://haraj.com.sa/11188938207/",
+      "title": "غرفة نوم كاملة مع التسريحة",
+      "price": null,
+      "price_value": null,
+      "city": "مكة",
+      "region": "منطقة مكة المكرمة",
+      "date": "2026-09-10",
+      "category": "أثاث",
+      "description": "غرفة نوم خشب مع تسريحة وسرير نفر ونص",
+      "is_new": false
+    }
+  ]
+}

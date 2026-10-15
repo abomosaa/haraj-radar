@@ -43,7 +43,7 @@ scrapper/
 المتطلب: Python 3.12 (الـ `.venv` الحالي مكسور — أعد إنشاءه كما below).
 
 ```powershell
-# 1) إنشاء البيئة (احذف .venv القديم أولاً إن وجد)
+# 1) إنشاء البيئة
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\playwright.exe install chromium
@@ -129,14 +129,8 @@ POST http://localhost:8000/api/search
 }
 ```
 
-## النشر على سوق اندرويد (اختياري)
-
-1. انشر الـ Backend على سيرفر (`VPS`/`Render`/`Fly` مع Docker) وحدّث `API_URL` في `pwa/app.js`.
-2. انشر `pwa/` على استضافة `HTTPS` (GitHub Pages / Netlify / Vercel).
-3. غلّف رابط الـ PWA عبر `PWABuilder` / `Bubblewrap (TWA)` وارفع الحزمة على Google Play.
-   (حوّل أيقونات `icons/*.svg` إلى `PNG ‏192/512` لأن المتجر يطلبها.)
 
 ## قيود السلامة
 
 - أول 10 نتائج فقط تُفتح تفاصيلها.
-- لا جمع لأرقام التواصل، لا رسائل/تفاعل مع البائعين، لا تحميل صور.
+- لا جمع لأرقام التواصل، لا رسائل/تفاعل مع البائعين.

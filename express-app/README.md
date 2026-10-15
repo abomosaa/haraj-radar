@@ -21,7 +21,7 @@ One-off scrape: `node scraper.js --once "cars"`.
 - `server.js` — serves `public/` + JSON API; `node-cron` runs a scrape hourly (`0 * * * *`), skipping if one is running.
 - `db.js` — SQLite at `data/app.db`: `listings` (url UNIQUE), `runs`, `subscriptions`.
 - `push.js` — after each scrape, new links are broadcast via Web Push to saved subscriptions.
-- `public/` — bilingual (AR/EN) table-only UI with hierarchical Location filter, dynamic City select, Category/Timeframe selects, search, New-only + run history.
+- `public/` — bilingual (AR/EN) Haraj Radar UI: cards + list views, tabs (ads/favorites/alerts/history), hierarchical Location filter, favorites in localStorage, demo fallback (`demo-data.json`) when the API is unreachable.
 
 ## Tests
 

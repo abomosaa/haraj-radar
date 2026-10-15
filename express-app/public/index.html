@@ -3,148 +3,159 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>متابعة الإعلانات</title>
-  <meta name="description" content="تصفح أحدث الإعلانات، صفِّ حسب المكان والوقت، وشغّل فحصاً جديداً." />
+  <title>رادار حراج</title>
+  <meta name="description" content="رادار حراج — تابع أحدث الإعلانات بالبطاقات، صفِّ حسب المكان والسعر، واحفظ المفضلة." />
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <div class="page">
-    <header class="site-header">
-      <div class="title-block">
-        <h1 data-i18n="headerTitle">متابعة الإعلانات</h1>
-        <p class="subtitle" data-i18n="headerSubtitle">أحدث العناصر في جدول واحد. صفِّ، واكتشف الجديد، وأعد الفحص عند الحاجة.</p>
-      </div>
-      <div class="header-actions">
-        <button id="langToggle" type="button" class="btn btn-small" aria-label="Language / اللغة">EN</button>
-        <button id="scrapeBtn" type="button" class="btn btn-primary" data-i18n="scrapeBtn">فحص الآن</button>
-        <button id="notifyBtn" type="button" class="btn" data-i18n="notifyBtn">تفعيل التنبيهات</button>
-      </div>
-    </header>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="30" height="30"><circle cx="16" cy="16" r="13" fill="none" stroke="#2563eb" stroke-width="2.5"/><circle cx="16" cy="16" r="7.5" fill="none" stroke="#2563eb" stroke-width="2" opacity=".55"/><circle cx="16" cy="16" r="3" fill="#2563eb"/><circle cx="22" cy="10" r="2.2" fill="#22c55e"/></svg>
+      </span>
+      <h1 data-i18n="brand">رادار حراج</h1>
+    </div>
+    <div class="searchbar" role="search">
+      <span class="search-ico" aria-hidden="true">⌕</span>
+      <input id="q" name="q" type="search" data-i18n-ph="searchPh" placeholder="ايفون 15 في جدة أقل من 3000" maxlength="200" autocomplete="off" />
+      <button id="searchBtn" class="btn btn-primary" type="button" data-i18n="searchBtn">ابحث في حراج</button>
+    </div>
+    <div class="top-actions">
+      <button id="notifyPill" class="pill" type="button"><span class="dot" aria-hidden="true"></span><span data-i18n="notifyOff">لا تنبيهات مفعّلة</span></button>
+      <button id="themeBtn" class="icon-btn" type="button" aria-label="المظهر">◐</button>
+      <button id="langToggle" class="icon-btn" type="button" aria-label="Language / اللغة">EN</button>
+    </div>
+  </header>
 
+  <nav class="tabs" role="tablist" aria-label="أقسام">
+    <button class="tab is-active" type="button" data-tab="ads" role="tab"><span aria-hidden="true">▦</span> <span data-i18n="tabAds">الإعلانات</span></button>
+    <button class="tab" type="button" data-tab="alerts" role="tab"><span aria-hidden="true">🔔</span> <span data-i18n="tabAlerts">تنبيهاتي</span></button>
+    <button class="tab" type="button" data-tab="favs" role="tab"><span aria-hidden="true">☆</span> <span data-i18n="tabFavs">المفضلة</span> <span id="favCount" class="fav-count" hidden></span></button>
+    <button class="tab" type="button" data-tab="history" role="tab"><span aria-hidden="true">🕐</span> <span data-i18n="tabHistory">السجل</span></button>
+  </nav>
+
+  <div class="layout">
     <main>
-      <!-- Filter bar: every input maps to a /api/listings query param -->
-      <section class="panel" data-i18n-aria="filtersAria" aria-label="الفلاتر">
-        <form id="filterForm" class="filters" autocomplete="off">
-          <div class="field field-search">
-            <label for="q" data-i18n="keywordLabel">كلمات البحث</label>
-            <div class="search-row">
-              <input id="q" name="q" type="search" data-i18n-ph="keywordPh" placeholder="مثال: سيارات…" />
-              <button id="liveSearchBtn" type="button" class="btn btn-primary" data-i18n="liveSearchBtn">بحث</button>
-            </div>
+      <!-- Ads view -->
+      <section id="view-ads">
+        <div class="ads-head">
+          <div class="ads-title">
+            <h2 data-i18n="latestTitle">أحدث ما رصدناه</h2>
+            <span id="count" class="count"></span>
           </div>
-          <div class="field">
-            <label for="location" data-i18n="locationLabel">المنطقة / الموقع</label>
-            <select id="location" name="location">
-              <option value="" data-i18n="allPh">الكل</option>
+          <div class="view-switch" role="group" aria-label="طريقة العرض">
+            <button id="gridBtn" class="icon-btn is-active" type="button" aria-label="بطاقات">▦</button>
+            <button id="listBtn" class="icon-btn" type="button" aria-label="قائمة">☰</button>
+          </div>
+          <div class="sort-wrap">
+            <select id="sortSel" aria-label="الترتيب">
+              <option value="best" data-i18n="sortBest">الأنسب</option>
+              <option value="new" data-i18n="sortNew">الأحدث</option>
+              <option value="cheap" data-i18n="sortCheap">الأرخص</option>
+              <option value="exp" data-i18n="sortExp">الأغلى</option>
             </select>
-          </div>
-          <div class="field">
-            <label for="city" data-i18n="cityLabel">المدينة</label>
-            <select id="city" name="city" disabled>
-              <option value="" data-i18n="cityAll">كل المدن</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="category" data-i18n="categoryLabel">التصنيف</label>
-            <select id="category" name="category">
-              <option value="" data-i18n="allPh">الكل</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="maxPrice" data-i18n="maxPriceLabel">أعلى سعر</label>
-            <input id="maxPrice" name="maxPrice" type="number" min="0" inputmode="numeric" dir="ltr" data-i18n-ph="maxPricePh" placeholder="بدون حد" />
-          </div>
-          <div class="field">
-            <label for="timeframe" data-i18n="timeframeLabel">الفترة الزمنية</label>
-            <select id="timeframe" name="timeframe">
-              <option value="any" data-i18n="timeframeAny">أي وقت</option>
-              <option value="today" data-i18n="timeframeToday">اليوم</option>
-              <option value="week" data-i18n="timeframeWeek">آخر 7 أيام</option>
-              <option value="month" data-i18n="timeframeMonth">آخر 30 يوماً</option>
-              <option value="custom" data-i18n="timeframeCustom">مخصص</option>
-            </select>
-          </div>
-          <div class="field" id="fromWrap">
-            <label for="from" data-i18n="fromLabel">من تاريخ</label>
-            <input id="from" name="from" type="date" dir="ltr" />
-          </div>
-          <div class="field" id="toWrap">
-            <label for="to" data-i18n="toLabel">إلى تاريخ</label>
-            <input id="to" name="to" type="date" dir="ltr" />
-          </div>
-          <div class="field field-check">
-            <input id="newOnly" name="newOnly" type="checkbox" />
-            <label for="newOnly" data-i18n="newOnlyLabel">الجديد فقط</label>
-          </div>
-          <div class="field field-buttons">
-            <button type="submit" class="btn btn-primary" data-i18n="applyBtn">تصفية</button>
-            <button type="button" id="clearBtn" class="btn btn-ghost" data-i18n="clearBtn">مسح</button>
-          </div>
-        </form>
-      </section>
-
-      <!-- Results -->
-      <section class="panel" data-i18n-aria="resultsAria" aria-label="النتائج">
-        <div class="results-head">
-          <h2 data-i18n="resultsTitle">النتائج</h2>
-          <div class="results-tools">
-            <p id="count" class="count" aria-live="polite"></p>
-            <span id="capNote" class="cap-note" data-i18n="capNote">عرض 20 كحد أقصى</span>
-            <input id="tableSearch" class="table-search" type="search" data-i18n-ph="tableSearchPh" placeholder="تصفية المعروض…" />
           </div>
         </div>
+        <p class="helper" data-i18n="helper">اكتب طلبك كما تقوله لصاحبك، ونفهم منه المدينة والسعر:</p>
+        <div id="chips" class="chips"></div>
         <p id="status" class="status" role="status" aria-live="polite"></p>
-        <div class="table-wrap">
-          <table id="resultsTable">
-            <thead>
-              <tr>
-                <th scope="col" data-i18n="thTitle">العنوان</th>
-                <th scope="col" data-i18n="thPrice">السعر</th>
-                <th scope="col" data-i18n="thRegion">المنطقة</th>
-                <th scope="col" data-i18n="thCity">المدينة</th>
-                <th scope="col" data-i18n="thTime">التاريخ</th>
-                <th scope="col" data-i18n="thCategory">التصنيف</th>
-              </tr>
-            </thead>
-            <tbody id="resultsBody">
-              <!-- Rows are rendered by app.js -->
-            </tbody>
-          </table>
+        <div id="cards" class="cards"></div>
+        <div id="listWrap" class="list-wrap" hidden><table class="list-table"><tbody id="listBody"></tbody></table></div>
+        <div id="emptyState" class="empty" hidden>
+          <p data-i18n="emptyTitle">لا إعلانات مطابقة.</p>
+          <p class="muted" data-i18n="emptyHint">جرّب تخفيف الفلاتر أو ابحث بكلمات مختلفة.</p>
         </div>
-        <p class="hint" data-i18n="hint">العناصر الجديدة تظهر مع شارة “جديد” وزر “تمت المشاهدة” لمسحها.</p>
       </section>
 
-      <!-- Last scrape runs -->
-      <section class="panel" data-i18n-aria="historyAria" aria-label="السجل">
-        <div class="results-head">
-          <h2 data-i18n="historyTitle">آخر الفحوصات</h2>
-          <button id="refreshHistoryBtn" type="button" class="btn btn-small" data-i18n="refreshBtn">تحديث</button>
+      <!-- Favorites view -->
+      <section id="view-favs" hidden>
+        <div class="ads-head">
+          <div class="ads-title"><h2 data-i18n="favsTitle">إعلاناتك المفضلة</h2><span id="favCount2" class="count"></span></div>
         </div>
-        <p id="historyStatus" class="status" role="status" aria-live="polite"></p>
-        <div class="table-wrap">
-          <table id="historyTable">
-            <thead>
-              <tr>
-                <th scope="col" data-i18n="hStarted">بدأ</th>
-                <th scope="col" data-i18n="hFinished">انتهى</th>
-                <th scope="col" data-i18n="hFound">الموجود</th>
-                <th scope="col" data-i18n="hNew">الجديد</th>
-                <th scope="col" data-i18n="hStatus">الحالة</th>
-              </tr>
-            </thead>
-            <tbody id="historyBody">
-              <!-- Rows are rendered by app.js -->
-            </tbody>
-          </table>
+        <div id="favCards" class="cards"></div>
+        <div id="favEmpty" class="empty"><p data-i18n="favEmpty">لا مفضلة بعد — اضغط ☆ على أي إعلان لحفظه هنا.</p></div>
+      </section>
+
+      <!-- Alerts view -->
+      <section id="view-alerts" hidden>
+        <div class="panel">
+          <h2 data-i18n="alertsTitle">تنبيهاتي</h2>
+          <p class="muted" data-i18n="alertsDesc">فعّل تنبيهات المتصفح لتصلك الإعلانات الجديدة فور رصدها.</p>
+          <p id="alertStatus" class="status" role="status"></p>
+          <button id="notifyBtn" class="btn btn-primary" type="button" data-i18n="notifyBtn">تفعيل التنبيهات</button>
+        </div>
+      </section>
+
+      <!-- History view -->
+      <section id="view-history" hidden>
+        <div class="panel">
+          <div class="panel-head">
+            <h2 data-i18n="historyTitle">السجل</h2>
+            <button id="refreshHistoryBtn" class="btn btn-small" type="button" data-i18n="refreshBtn">تحديث</button>
+          </div>
+          <p id="historyStatus" class="status" role="status"></p>
+          <div class="table-wrap"><table class="hist-table">
+            <thead><tr>
+              <th data-i18n="hStarted">بدأ</th><th data-i18n="hFound">الموجود</th>
+              <th data-i18n="hNew">الجديد</th><th data-i18n="hStatus">الحالة</th>
+            </tr></thead>
+            <tbody id="historyBody"></tbody>
+          </table></div>
         </div>
       </section>
     </main>
 
-    <footer class="footer">
-      <p><span data-i18n="footerPre">البيانات من</span> <code dir="ltr">GET /api/listings</code>. <span data-i18n="footerPost">والفحص والسجل يتحدثان من الأزرار أعلاه.</span></p>
-    </footer>
+    <aside class="filters" aria-label="تصفية">
+      <h2 data-i18n="filtersTitle">تصفية</h2>
+      <div class="field">
+        <label for="location" data-i18n="locationLabel">المنطقة</label>
+        <select id="location" name="location"><option value="" data-i18n="allPh">الكل</option></select>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="city" data-i18n="cityLabel">المدينة</label>
+          <select id="city" name="city" disabled><option value="" data-i18n="cityAll">كل المدن</option></select>
+        </div>
+        <div class="field">
+          <label for="category" data-i18n="categoryLabel">القسم</label>
+          <select id="category" name="category"><option value="" data-i18n="allPh">الكل</option></select>
+        </div>
+      </div>
+      <div class="field">
+        <span class="lbl" data-i18n="priceLabel">السعر (ريال)</span>
+        <div class="field-row">
+          <input id="priceFrom" type="number" min="0" inputmode="numeric" dir="ltr" data-i18n-ph="priceFromPh" placeholder="من" />
+          <span class="dash" aria-hidden="true">–</span>
+          <input id="priceTo" type="number" min="0" inputmode="numeric" dir="ltr" data-i18n-ph="priceToPh" placeholder="إلى" />
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="exclude" data-i18n="excludeLabel">استبعد كلمات</label>
+          <input id="exclude" type="text" data-i18n-ph="excludePh" placeholder="مثال: مكسور، قطع" maxlength="120" />
+        </div>
+        <div class="field">
+          <label for="timeframe" data-i18n="timeframeLabel">تاريخ الإعلان</label>
+          <select id="timeframe" name="timeframe">
+            <option value="any" data-i18n="timeframeAny">أي وقت</option>
+            <option value="today" data-i18n="timeframeToday">اليوم</option>
+            <option value="week" data-i18n="timeframeWeek">آخر 7 أيام</option>
+            <option value="month" data-i18n="timeframeMonth">آخر 30 يوماً</option>
+          </select>
+        </div>
+      </div>
+      <div class="checks">
+        <label class="check"><input id="fixedPrice" type="checkbox" /><span data-i18n="fixedPrice">بسعر محدد فقط</span></label>
+        <label class="check"><input id="withImages" type="checkbox" /><span data-i18n="withImages">بصور فقط</span></label>
+        <label class="check"><input id="newOnly" type="checkbox" /><span data-i18n="newOnly">الجديد فقط</span></label>
+        <label class="check"><input id="dropped" type="checkbox" /><span data-i18n="dropped">نزل سعرها</span></label>
+      </div>
+      <input id="tableSearch" class="table-search" type="search" data-i18n-ph="tableSearchPh" placeholder="تصفية المعروض…" aria-label="تصفية المعروض" />
+      <button id="clearBtn" class="btn btn-ghost" type="button" data-i18n="clearBtn">مسح التصفية</button>
+    </aside>
   </div>
-
-  <script src="./app.js" defer></script>
+</div>
+<script src="./app.js" defer></script>
 </body>
 </html>

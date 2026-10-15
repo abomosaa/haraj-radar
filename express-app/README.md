@@ -1,41 +1,88 @@
-# Haraj Express Scraper
+# رادار حراج — Haraj Radar
 
-Node.js Express app: hourly Playwright scraper → SQLite history → table UI + Web Push for new links.
+ابحث في حراج بجملة عادية، واحفظ أي بحث ليصلك إشعار بالإعلانات الجديدة فقط وبنزول الأسعار.
+الواجهة عربية (مع الإنجليزية)، تعمل على الكمبيوتر والجوال، وتتثبت كتطبيق (PWA).
 
-## Run
+## التشغيل
 
-```bash
+```powershell
 cd express-app
 npm install
-npx playwright install chromium
-npx web-push generate-vapid-keys   # once; put keys in env below
-PORT=3000 HARAJ_KEYWORD="cars" VAPID_PUBLIC=... VAPID_PRIVATE=... node server.js
-# open http://localhost:3000
+npx playwright install chromium   # مرة واحدة — يُستخدم فقط إذا تعطّل الطريق السريع (GraphQL)
+npm start                         # → http://localhost:3000
 ```
 
-One-off scrape: `node scraper.js --once "cars"`.
+عند التشغيل يطبع الخادم رابطاً مثل `http://192.168.1.20:3000`. افتحه من جوالك وهو على نفس شبكة الواي فاي.
+مفاتيح الإشعارات تُنشأ تلقائياً أول مرة في `data/vapid.json`، ولم تعد تحتاج `npx web-push generate-vapid-keys`.
 
-## How it works
+### الإشعارات على الجوال
 
-- `scraper.js` — headless Chromium, blocks images/CSS/media/fonts, parses the search page in-browser, opens detail pages for the first 10 results only. New URLs get `is_new: true`.
-- `server.js` — serves `public/` + JSON API; `node-cron` runs a scrape hourly (`0 * * * *`), skipping if one is running.
-- `db.js` — SQLite at `data/app.db`: `listings` (url UNIQUE), `runs`, `subscriptions`.
-- `push.js` — after each scrape, new links are broadcast via Web Push to saved subscriptions.
-- `public/` — bilingual (AR/EN) Haraj Radar UI: cards + list views, tabs (ads/favorites/alerts/history), hierarchical Location filter, favorites in localStorage, demo fallback (`demo-data.json`) when the API is unreachable.
+المتصفحات تسمح بالإشعارات على `https` أو `localhost` فقط. رابط الشبكة المحلية (`http://192.168...`) يكفي للتصفح والبحث، أما الإشعارات فتحتاج رابط https. أسهل طريقتين:
 
-## Tests
+- **Cloudflare Tunnel** (مجاني، بدون حساب): `npx cloudflared tunnel --url http://localhost:3000` ثم افتح الرابط الذي يظهر.
+- **Tailscale**: ثبّته على الكمبيوتر والجوال، ثم شغّل `tailscale serve 3000`.
+
+إذا فتحت التطبيق للإنترنت فضع كلمة مرور: `$env:APP_PASSWORD="..."; npm start`.
+على الآيفون: افتح الرابط في Safari، ثم «مشاركة» ← «إضافة إلى الشاشة الرئيسية»، ثم فعّل الإشعارات من داخل التطبيق.
+
+### متغيرات اختيارية
+
+| المتغير | الافتراضي | الوظيفة |
+|---|---|---|
+| `PORT` / `HOST` | `3000` / `0.0.0.0` | المنفذ والواجهة |
+| `HARAJ_CRON` | `*/30 * * * *` | كم مرة نفحص البحوث المحفوظة |
+| `APP_PASSWORD` | — | حماية التطبيق بكلمة مرور (اسم المستخدم أي شيء) |
+| `ANTHROPIC_API_KEY` | — | يفعّل زر **AI** لفهم الطلبات المعقدة (بدونه يعمل المحلل القواعدي) |
+| `HARAJ_AI_MODEL` | `claude-haiku-5-5` | النموذج المستخدم مع المفتاح أعلاه |
+| `HARAJ_KEYWORD` | — | كلمة قديمة تُفحص دورياً إذا لم توجد بحوث محفوظة |
+| `VAPID_PUBLIC` / `VAPID_PRIVATE` / `VAPID_SUBJECT` | تلقائي | مفاتيح الإشعارات إن أردت تثبيتها بنفسك |
+
+## نسخة التطبيق بدون سيرفر
+
+`node build-web.js` (أو `npm run build:web`) يولّد مجلد `../web-app`: نفس الواجهة تعمل كاملة داخل المتصفح بلا نافذة سوداء ولا سيرفر، وتُثبَّت كتطبيق على الجوال والكمبيوتر بعد رفعها على استضافة مجانية. التفاصيل في `web-app/README.md`.
+
+## ماذا يفعل
+
+- **بحث بجملة عادية:** «ابي كامري 2020 بالرياض بين 30 و 50 ألف» تتحول إلى: الكلمة «كامري 2020»، والمدينة الرياض، والسعر 30,000–50,000. يفهم «أقل من / تحت / فوق / بين / ألف / k»، والأرقام العربية، و«الأرخص».
+- **بحث مباشر في حراج:** زر البحث يجلب صفحتين من حراج (≈40 إعلاناً) وينتظرها، ثم يعرضها مرتبة مع ما حُفظ سابقاً. يمكنك أيضاً «جلب المزيد من حراج».
+- **مطابقة أذكى:** «السيارة» = «سيارة» = «سيارات»، و«ايفون» = «iPhone»، و«جدة» = «جده». الترتيب حسب الصلة (العنوان أهم من الوصف)، أو الأحدث، أو الأرخص، أو الأغلى، مع صفحات (24 لكل صفحة).
+- **تنبيهاتي:** احفظ أي بحث. أول فحص يسجّل الموجود حالياً بصمت، وبعدها يصلك إشعار بكل إعلان جديد يطابق المدينة والسعر، وإشعار عند نزول سعر إعلان تتابعه.
+- **استبعاد كلمات:** اكتب `ايفون -مكسور -قطع` أو استخدم حقل «استبعد كلمات» في التصفية. يعمل في البحث والتنبيهات.
+- **صفحة الإعلان داخل التطبيق:** الضغط على أي إعلان يفتح كل صوره ووصفه كاملاً (تُجلب مباشرة من حراج). أرقام الجوال في الوصف تُخفى تلقائياً، والتواصل يتم بزر «افتح في حراج». (Ctrl+ضغط يفتح حراج مباشرة.)
+- **إخفاء بائع:** من زر ⋯ على أي إعلان: أخفِ هذا الإعلان، أو كل إعلانات البائع، أو أخفِ البائع من تنبيه واحد فقط (مفيد لمن يبيع أشياء كثيرة). تُدار من «تنبيهاتي ← البائعون المخفيون».
+- **ساعات الهدوء ومدة الفحص:** من «تنبيهاتي» تختار كل كم يُفحص حراج (10 دقائق إلى ساعتين)، وساعات لا تصلك فيها إشعارات، ثم يصلك ملخص واحد بما فاتك.
+- **لا تكرار:** نفس التنبيه (نفس الكلمة والمدينة والسعر) لا يُحفظ مرتين.
+- **إعادة النشر:** إذا أعاد البائع نشر نفس الإعلان يظهر مرة واحدة فقط (الأحدث).
+- **المفضلة والإخفاء:** نجمة لحفظ الإعلان، و× لإخفاء الإعلانات التي لا تهمك (مع تراجع).
+- **الواجهة:** بطاقات بالصور وملصق السعر، أو عرض قائمة. على الجوال: شريط تبويب سفلي وتصفية في لوحة منبثقة. وضع ليلي تلقائي، وتعمل دون اتصال للصفحة نفسها.
+
+## الاختبارات
 
 ```bash
-npm test   # node --test test/regression.js (uses a temp DB, never touches data/app.db)
+npm test   # 36 اختباراً — قاعدة بيانات مؤقتة، لا تلمس data/app.db
 ```
 
-## API
+## الـ API
 
-| Method | Path | Purpose |
+| Method | Path | الوظيفة |
 |---|---|---|
-| GET | `/api/listings?...` | Filtered listings `{listings, count}` — params: `q location region city category from to maxPrice newOnly limit` (tokenized AND text search; limit default 20, hard cap 20; `maxPrice` drops rows priced above it) |
-| GET | `/api/meta` | Filter metadata `{locations, citiesByRegion, categories}` for the dropdowns |
-| PUT | `/api/listings/seen` | Clear new badges `{ids}` |
-| POST | `/api/scrape` | Trigger background scrape |
-| GET | `/api/history` | Recent scrape runs |
-| GET/POST | `/api/vapid-public-key`, `/api/subscribe` | Push setup |
+| POST | `/api/search` | `{q, ai?, harajPage?, filters?}` ← تحليل الجملة + بحث مباشر في حراج + نتائج مرتبة `{parsed, live, listings, total}` |
+| GET | `/api/listings` | فلترة محلية: `q location city category minPrice maxPrice hasPrice hasImage from to newOnly starred priceDrop watch sort limit(≤100) offset includeIds dupes` ← `{listings, total}` |
+| GET | `/api/parse?q=` | معاينة فهم الجملة |
+| PUT | `/api/listings/:id` | `{starred}` أو `{hidden}` |
+| PUT | `/api/listings/seen` | `{ids}` أو `{all:true}` |
+| GET/POST | `/api/watches` | قائمة التنبيهات / إنشاء تنبيه من جملة `{q}` |
+| PATCH/DELETE | `/api/watches/:id` | تفعيل/إيقاف `{enabled}` / حذف |
+| POST | `/api/watches/:id/run`، `/api/watches/run-all` | فحص فوري |
+| PUT | `/api/watches/:id/seen` | تصفير عدّاد الجديد |
+| GET | `/api/meta`، `/api/stats`، `/api/history`، `/api/status` | بيانات الفلاتر والإحصاءات والسجل |
+| GET/POST | `/api/vapid-public-key`، `/api/subscribe`، `/api/push-test` | الإشعارات |
+| POST | `/api/scrape` | (قديم) فحص كلمة واحدة في الخلفية |
+
+## الملفات
+
+- `query.js` — توحيد الكتابة العربية، والمرادفات، والمدن والمناطق، ومحلل الجمل (+ AI اختياري).
+- `db.js` — SQLite (`node:sqlite`)، والبحث المرتب، والتنبيهات، وتتبع الأسعار، والترحيلات التلقائية للقاعدة القديمة.
+- `scraper.js` — GraphQL حراج أولاً (مع صفحات ومهلة)، ثم المتصفح كاحتياط. `liveSearch` و`runWatch`.
+- `server.js` — الـ API والجدولة. `push.js` — الإشعارات.
+- `public/` — الواجهة (`index.html`، `styles.css`، `app.js`)، و`sw.js` (الإشعارات والعمل دون اتصال)، و`manifest.webmanifest`، و`icons/`.

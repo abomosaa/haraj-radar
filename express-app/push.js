@@ -1,30 +1,46 @@
 "use strict";
 // Web Push helpers (web-push lib).
-// Generate keys once:  npx web-push generate-vapid-keys
-// Then set env: VAPID_PUBLIC, VAPID_PRIVATE, VAPID_SUBJECT (mailto:).
+// Keys come from env (VAPID_PUBLIC, VAPID_PRIVATE, VAPID_SUBJECT). When they
+// are missing, a key pair is generated once and kept in data/vapid.json so
+// notifications work out of the box.
 
+const fs = require("fs");
+const path = require("path");
 const webpush = require("web-push");
 const { db } = require("./db");
 
 let configured = null; // tri-state cache: null = unchecked
+let keys = null;
+
+function loadKeys() {
+  if (process.env.VAPID_PUBLIC && process.env.VAPID_PRIVATE) {
+    return { publicKey: process.env.VAPID_PUBLIC, privateKey: process.env.VAPID_PRIVATE };
+  }
+  if (process.env.HARAJ_DB_PATH) return null; // tests: never write key files
+  const file = path.join(__dirname, "data", "vapid.json");
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    const k = webpush.generateVAPIDKeys();
+    fs.writeFileSync(file, JSON.stringify(k, null, 2));
+    console.log("[push] generated VAPID keys in data/vapid.json");
+    return k;
+  }
+}
 
 function isConfigured() {
   if (configured === null) {
-    const { VAPID_PUBLIC, VAPID_PRIVATE } = process.env;
-    configured = Boolean(VAPID_PUBLIC && VAPID_PRIVATE);
+    try { keys = loadKeys(); } catch (e) { console.warn("[push] key setup failed:", e.message); keys = null; }
+    configured = Boolean(keys && keys.publicKey && keys.privateKey);
     if (configured) {
-      webpush.setVapidDetails(
-        process.env.VAPID_SUBJECT || "mailto:admin@example.com",
-        VAPID_PUBLIC,
-        VAPID_PRIVATE
-      );
+      webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:admin@example.com", keys.publicKey, keys.privateKey);
     }
   }
   return configured;
 }
 
 function getPublicKey() {
-  return process.env.VAPID_PUBLIC || null;
+  return isConfigured() ? keys.publicKey : null;
 }
 
 function saveSubscription(sub) {
@@ -59,4 +75,4 @@ async function sendToAll(payload) {
   return { sent };
 }
 
-module.exports = { isConfigured, getPublicKey, saveSubscription, sendToAll };
+module.exports = { isConfigured, getPublicKey, saveSubscription, sendToAll, getSubscriptions };

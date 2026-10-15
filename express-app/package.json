@@ -1,13 +1,16 @@
 {
   "name": "haraj-express-scraper",
-  "version": "0.1.0",
-  "description": "Express + Playwright hourly scraper with SQLite history and Web Push",
+  "version": "0.2.0",
+  "description": "Haraj Radar: natural-language Haraj search, saved-search alerts (Web Push), SQLite history",
   "main": "server.js",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=22.5"
+  },
   "scripts": {
     "start": "node server.js",
     "scrape": "node scraper.js --once",
-    "test": "node --test test/regression.js"
+    "test": "node --test test/regression.js",
+    "build:web": "node build-web.js"
   },
   "dependencies": {
     "express": "^4.21.2",

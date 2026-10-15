@@ -8,8 +8,10 @@
 // Library:   const { runScrape } = require("./scraper");
 
 const { chromium } = require("playwright");
-const { upsertListing, startRun, finishRun } = require("./db");
+const DB = require("./db");
+const { upsertListing, startRun, finishRun } = DB;
 const { sendToAll } = require("./push");
+const { parsePrice } = require("./query");
 
 const BASE = "https://haraj.com.sa";
 const DETAIL_LIMIT = 10;
@@ -43,18 +45,91 @@ const GQL_HEADERS = {
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36",
 };
 
-async function fetchGraphQL(keyword, { limit = 20 } = {}) {
-  const res = await fetch(GRAPHQL_URL, {
-    method: "POST",
-    headers: GQL_HEADERS,
-    body: JSON.stringify({ query: SEARCH_QUERY, variables: { search: keyword, page: 1, limit } }),
-  });
+async function fetchGraphQL(keyword, { limit = 20, page = 1, city = null, timeoutMs = 15000 } = {}) {
+  const variables = { search: keyword, page, limit };
+  if (city) variables.city = city;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  let res;
+  try {
+    res = await fetch(GRAPHQL_URL, {
+      method: "POST",
+      headers: GQL_HEADERS,
+      body: JSON.stringify({ query: SEARCH_QUERY, variables }),
+      signal: ctrl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) throw new Error(`GraphQL HTTP ${res.status}`);
   const text = (await res.text()).trim();
   if (text === "...") throw new Error("GraphQL rejected query shape");
-  const items = JSON.parse(text)?.data?.search?.items;
+  const data = JSON.parse(text)?.data?.search;
+  const items = data?.items;
   if (!Array.isArray(items)) throw new Error("GraphQL unexpected shape");
-  return items.map(mapGraphQLItem).filter((i) => i.url && i.title);
+  const out = items.map(mapGraphQLItem).filter((i) => i.url && i.title);
+  out.hasNextPage = Boolean(data?.pageInfo?.hasNextPage);
+  return out;
+}
+
+// Search Haraj for one keyword across a few pages (GraphQL, polite gap).
+// If a city filter yields nothing, retry once without it (Haraj may spell
+// cities differently) — callers filter by city locally anyway.
+async function fetchPages(keyword, { pages = 1, startPage = 1, city = null } = {}) {
+  const all = [];
+  let hasMore = false;
+  for (let p = startPage; p < startPage + pages; p++) {
+    let batch = await fetchGraphQL(keyword, { page: p, city });
+    if (!batch.length && city && p === startPage) {
+      batch = await fetchGraphQL(keyword, { page: p });
+      city = null;
+    }
+    all.push(...batch);
+    hasMore = batch.hasNextPage;
+    if (!batch.hasNextPage || !batch.length) break;
+    await sleep(400);
+  }
+  const seen = new Set();
+  const out = all.filter((i) => (seen.has(i.url) ? false : seen.add(i.url)));
+  out.hasMore = hasMore;
+  return out;
+}
+
+// One ad's full details (all photos + full text) via Haraj's `posts` query.
+// Contact fields are deliberately NOT requested.
+const POST_QUERY = `query Posts($ids: [Int]) {
+  posts(id: $ids) {
+    items { id title bodyTEXT imagesList city geoNeighborhood postDate authorUsername URL price { formattedPrice } commentCount tags }
+  }
+}`;
+async function fetchPost(postId, { timeoutMs = 12000 } = {}) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch("https://graphql.haraj.com.sa/?queryName=posts", {
+      method: "POST", headers: GQL_HEADERS, signal: ctrl.signal,
+      body: JSON.stringify({ query: POST_QUERY, variables: { ids: [Number(postId)] } }),
+    });
+    if (!res.ok) throw new Error(`GraphQL HTTP ${res.status}`);
+    const text = (await res.text()).trim();
+    if (text === "...") throw new Error("GraphQL rejected query shape");
+    const item = JSON.parse(text)?.data?.posts?.items?.[0];
+    if (!item) return null;
+    return {
+      ...mapGraphQLItem(item),
+      images: Array.isArray(item.imagesList) ? item.imagesList.filter((u) => /^https:\/\//.test(u)).slice(0, 20) : [],
+      descriptionFull: String(item.bodyTEXT || "").trim(),
+      comments: Number(item.commentCount) || 0,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Haraj ad URLs are "/11<postId>/slug/" → postId.
+function postIdFromUrl(url) {
+  const m = String(url || "").match(/haraj\.com\.sa\/11(\d+)/);
+  return m ? Number(m[1]) : null;
 }
 
 // Map one GraphQL Post to our listing shape (same fields as the DOM path,
@@ -79,7 +154,9 @@ function mapGraphQLItem(g) {
     city: src.city || src.geoCity || null,
     date,
     description: body || null,
-    category: pickCategory(tags, src.city, src.title),
+    // Haraj tags run top-down: ["حراج السيارات", "تويوتا", "كامري"].
+    category: tags[0] || null,
+    subcategory: tags.slice(1).join(" / ") || null,
     country: "Saudi Arabia",
     region: null, // derived from the city map in db.js
     seller: src.authorUsername || null,
@@ -297,36 +374,13 @@ function mergeApiItems(payloads, domItems) {
   return out;
 }
 
-async function runScrape(keyword, { detailLimit = DETAIL_LIMIT } = {}) {
-  const kw = (keyword || process.env.HARAJ_KEYWORD || "").trim();
-  if (!kw) throw new Error("Missing keyword (arg or HARAJ_KEYWORD)");
-  const fresh = []; // newly-seen listings (for push)
-  // Fast path first: GraphQL returns the full session dataset in <1s.
-  try {
-    const gqlItems = await fetchGraphQL(kw, { limit: Math.max(detailLimit, 20) });
-    if (gqlItems.length) {
-      const runId0 = startRun(kw);
-      let added = 0;
-      for (const it of gqlItems) {
-        if (upsertListing(it)) { fresh.push(it); added++; }
-      }
-      finishRun(runId0, { found: gqlItems.length, addedNew: added, status: "ok" });
-      for (const it of fresh) {
-        sendToAll({ title: "New ad: " + (it.title || kw), body: it.price || "", url: it.url }).catch(() => {});
-      }
-      return { found: gqlItems.length, addedNew: added, source: "graphql" };
-    }
-  } catch (e) {
-    console.warn("[scrape] GraphQL fast path failed, falling back to browser:", e.message);
-  }
-  // Browser fallback (DOM parsing + intercepted API payloads).
-  const runId = startRun(kw);
+// Browser fallback: open the Haraj search page, read the SPA's own API
+// payloads + DOM cards, optionally enrich the first N via detail pages.
+async function browserSearch(kw, { detailLimit = DETAIL_LIMIT } = {}) {
   const browser = await chromium.launch({ headless: true });
   try {
     const context = await fastContext(browser);
     const page = await context.newPage();
-    // Network over HTML: capture the SPA's own search-API payloads live.
-    // Attached before navigation; filtered to Haraj GraphQL JSON only.
     const apiPayloads = [];
     page.on("response", async (res) => {
       try {
@@ -336,67 +390,179 @@ async function runScrape(keyword, { detailLimit = DETAIL_LIMIT } = {}) {
         if (body && body.data) apiPayloads.push(body.data);
       } catch { /* ignore aborted/non-JSON */ }
     });
-    await page.goto(`${BASE}/search/${encodeURIComponent(kw)}/`, {
-      waitUntil: "domcontentloaded", timeout: 30000,
-    });
-    // Let hydration settle (bounded): scripts already ran at domcontentloaded.
+    await page.goto(`${BASE}/search/${encodeURIComponent(kw)}/`, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
     await page.waitForSelector('a[href^="/"]', { timeout: 15000 }).catch(() => {});
     const items = mergeApiItems(apiPayloads, await extractSearchItems(page));
 
-    const detailPage = await context.newPage();
     const enriched = [];
-    for (const item of items.slice(0, detailLimit)) {
-      try {
-        const d = await extractDetail(detailPage, item.url);
-        const merged = { ...item };
-        for (const [k, v] of Object.entries(d)) {
-          if (k !== "crumbs" && k !== "ldCrumbs" && v) merged[k] = v;
+    if (detailLimit > 0) {
+      const detailPage = await context.newPage();
+      for (const item of items.slice(0, detailLimit)) {
+        try {
+          const d = await extractDetail(detailPage, item.url);
+          const merged = { ...item };
+          for (const [k, v] of Object.entries(d)) {
+            if (k !== "crumbs" && k !== "ldCrumbs" && v && !merged[k]) merged[k] = v;
+          }
+          if (item.city) merged.city = item.city;
+          merged.date = item.date || parseHarajDate(d.date) || null;
+          merged.category = item.category || pickCategory(d.ldCrumbs?.length ? d.ldCrumbs : d.crumbs, merged.city, merged.title);
+          enriched.push(merged);
+        } catch {
+          enriched.push(item);
         }
-        // Search-card city (from /city/ links) is the real city;
-        // detail pages often show a district ("العليا") instead.
-        if (item.city) merged.city = item.city;
-        // Normalize date (relative Arabic dates → YYYY-MM-DD) and
-        // derive category from JSON-LD breadcrumbs (DOM crumbs fallback).
-        // Region is derived in db.js from the city map when missing.
-        merged.date = parseHarajDate(d.date || item.date) || null;
-        merged.category = pickCategory(d.ldCrumbs?.length ? d.ldCrumbs : d.crumbs, merged.city, merged.title);
-        enriched.push(merged);
-      } catch {
-        enriched.push(item); // detail failed → keep search-card data
+        await sleep(DETAIL_GAP_MS);
       }
-      await sleep(DETAIL_GAP_MS);
-    }
-    await detailPage.close();
-    const rest = items.slice(detailLimit);
-    const all = [...enriched, ...rest];
-
-    for (const it of all) {
-      // region/category survive when present; db.js derives region from city map as fallback.
-      if (upsertListing({ country: "Saudi Arabia", ...it })) fresh.push(it);
-    }
-    finishRun(runId, { found: all.length, addedNew: fresh.length, status: "ok" });
-
-    // Notify subscribers about new links (fire-and-forget).
-    for (const it of fresh) {
-      sendToAll({ title: "New ad: " + (it.title || kw), body: it.price || "", url: it.url }).catch(() => {});
+      await detailPage.close();
     }
     await context.close();
-    return { found: all.length, addedNew: fresh.length };
+    return [...enriched, ...items.slice(enriched.length)];
+  } finally {
+    await browser.close();
+  }
+}
+
+// Get search results for a keyword: GraphQL first, browser second.
+async function collect(kw, { pages = 1, startPage = 1, city = null, detailLimit = DETAIL_LIMIT, allowBrowser = true } = {}) {
+  try {
+    const items = await fetchPages(kw, { pages, startPage, city });
+    if (items.length || !allowBrowser) return { items, source: "graphql", hasMore: items.hasMore };
+  } catch (e) {
+    if (!allowBrowser) throw e;
+    console.warn("[scrape] GraphQL failed, falling back to browser:", e.message);
+  }
+  const items = await browserSearch(kw, { detailLimit });
+  return { items, source: "browser", hasMore: false };
+}
+
+// Store items; returns per-item results aligned with input.
+function storeAll(items) {
+  return items.map((it) => ({ item: it, ...upsertListing({ country: "Saudi Arabia", ...it }) }));
+}
+
+// Legacy one-keyword scrape (manual button / HARAJ_KEYWORD cron).
+async function runScrape(keyword, { detailLimit = DETAIL_LIMIT } = {}) {
+  const kw = (keyword || process.env.HARAJ_KEYWORD || "").trim();
+  if (!kw) throw new Error("Missing keyword (arg or HARAJ_KEYWORD)");
+  const runId = startRun(kw);
+  try {
+    const { items, source } = await collect(kw, { detailLimit });
+    const stored = storeAll(items);
+    const fresh = stored.filter((r) => r.isNew);
+    finishRun(runId, { found: items.length, addedNew: fresh.length, status: "ok" });
+    if (fresh.length) {
+      sendToAll({
+        title: `${fresh.length} إعلان جديد: ${kw}`,
+        body: fresh.slice(0, 3).map((r) => r.item.title).join("\n"),
+        url: fresh.length === 1 ? fresh[0].item.url : "/",
+        tag: "scrape-" + kw,
+      }).catch(() => {});
+    }
+    return { found: items.length, addedNew: fresh.length, source };
   } catch (err) {
     finishRun(runId, { status: "error: " + String(err.message || err).slice(0, 200) });
     throw err;
-  } finally {
-    await browser.close();
+  }
+}
+
+// Interactive search: fetch Haraj now, store, return ids so the API can
+// show exactly what Haraj matched (plus older local matches).
+async function liveSearch(keyword, { city = null, pages = 2, startPage = 1 } = {}) {
+  const kw = String(keyword || "").trim();
+  if (!kw) return { ids: [], newIds: [], found: 0, added: 0, source: null, hasMore: false };
+  const runId = startRun(kw);
+  try {
+    const { items, source, hasMore } = await collect(kw, { city, pages, startPage, detailLimit: 0 });
+    const stored = storeAll(items);
+    const newIds = stored.filter((r) => r.isNew).map((r) => r.id);
+    finishRun(runId, { found: items.length, addedNew: newIds.length, status: "ok" });
+    return { ids: stored.map((r) => r.id), newIds, found: items.length, added: newIds.length, source, hasMore: !!hasMore };
+  } catch (err) {
+    finishRun(runId, { status: "error: " + String(err.message || err).slice(0, 200) });
+    throw err;
+  }
+}
+
+// Run one saved search. First run (baseline) records current matches as
+// already seen so you are only alerted about ads posted afterwards.
+// "3 إعلانات جديدة" with correct Arabic number agreement.
+function arCount(n) {
+  if (n === 1) return "إعلان جديد";
+  if (n === 2) return "إعلانان جديدان";
+  if (n <= 10) return `${n} إعلانات جديدة`;
+  return `${n} إعلاناً جديداً`;
+}
+
+// Quiet hours (settings: quiet_on, quiet_from, quiet_to as hours 0–23,
+// local time of the computer running the server). Range may wrap midnight.
+function isQuietNow(now = new Date()) {
+  if (DB.getSetting("quiet_on", "0") !== "1") return false;
+  const from = Number(DB.getSetting("quiet_from", 0));
+  const to = Number(DB.getSetting("quiet_to", 7));
+  const h = now.getHours();
+  if (from === to) return false;
+  return from < to ? h >= from && h < to : h >= from || h < to;
+}
+
+async function runWatch(w, { baseline = false, notify = true } = {}) {
+  try {
+    // Page 1 holds Haraj's newest ~20. If every one of them is new to us,
+    // more may have been posted since the last check → keep paging (max 3).
+    const items = [];
+    const stored = [];
+    for (let page = 1; page <= (baseline ? 1 : 3); page++) {
+      const res = await collect(w.q, { city: w.city, pages: 1, startPage: page, detailLimit: 0, allowBrowser: !baseline && page === 1 });
+      const batch = storeAll(res.items);
+      items.push(...res.items);
+      stored.push(...batch);
+      if (!res.hasMore || !batch.length || batch.some((r) => !r.isNew)) break;
+      await sleep(600);
+    }
+    const accepted = stored.filter((r) => DB.watchAccepts(w, r.item));
+    const freshIds = DB.addWatchHits(w.id, accepted.map((r) => r.id), { seen: baseline });
+    // Price drops on ads this watch already tracks.
+    const drops = accepted.filter((r) => r.priceChanged && r.oldPrice != null && parsePrice(r.item.price) < r.oldPrice);
+    DB.finishWatchRun(w.id, `ok: ${items.length} found, ${baseline ? 0 : freshIds.length} new`);
+    if (notify && !baseline && !isQuietNow()) {
+      // One notification per alert: everything not announced yet, which
+      // includes ads held back during quiet hours.
+      const label = w.label || w.q;
+      const pending = DB.pendingHits(w.id);
+      if (pending.length) {
+        await sendToAll({
+          title: pending.length === 1 ? `جديد في «${label}»` : `${arCount(pending.length)} في «${label}»`,
+          body: pending.slice(0, 3).map((l) => `${l.title}${l.price ? " — " + l.price : ""}`).join("\n"),
+          url: pending.length === 1 ? pending[0].url : `/?watch=${w.id}`,
+          tag: "watch-" + w.id,
+        }).catch(() => {});
+        DB.markNotified(w.id);
+      }
+      for (const r of drops) {
+        await sendToAll({
+          title: `نزل السعر: ${r.item.title}`,
+          body: `${r.oldPrice} ← ${r.item.price}`,
+          url: r.item.url,
+          tag: "drop-" + r.id,
+        }).catch(() => {});
+      }
+    }
+    return { found: items.length, fresh: baseline ? 0 : freshIds.length, drops: drops.length };
+  } catch (e) {
+    DB.finishWatchRun(w.id, "error: " + String(e.message || e).slice(0, 160));
+    throw e;
   }
 }
 
 if (require.main === module && process.argv.includes("--once")) {
   const kw = process.argv[process.argv.indexOf("--once") + 1] || process.env.HARAJ_KEYWORD;
   runScrape(kw).then(
-    (r) => { console.log(`done: found=${r.found} new=${r.addedNew}`); process.exit(0); },
+    (r) => { console.log(`done: found=${r.found} new=${r.addedNew} via ${r.source}`); process.exit(0); },
     (e) => { console.error("scrape failed:", e.message); process.exit(1); }
   );
 }
 
-module.exports = { runScrape, fetchGraphQL, mapGraphQLItem, mergeApiItems, parseHarajDate, pickCategory, isBlockedResource };
+module.exports = {
+  runScrape, liveSearch, runWatch, isQuietNow, arCount, fetchPost, postIdFromUrl, collect, fetchGraphQL, fetchPages, mapGraphQLItem,
+  mergeApiItems, parseHarajDate, pickCategory, isBlockedResource,
+};

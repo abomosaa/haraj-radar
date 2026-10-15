@@ -1,0 +1,354 @@
+"use strict";
+// Search language helpers: Arabic normalization, synonyms, known cities,
+// and a natural-language query parser ("ايفون 13 في جدة اقل من 2000").
+// Optional AI parsing (ANTHROPIC_API_KEY) falls back to the rule parser.
+
+// --- Normalization ---------------------------------------------------------
+// أ/إ/آ→ا, ة→ه, ى/ئ→ي, ؤ→و, strip tashkeel/tatweel, Arabic-Indic digits → 0-9,
+// Latin lowercased. Makes "جدة" == "جده" and "iPhone" == "iphone".
+function latinDigits(s) {
+  return String(s)
+    .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d))
+    .replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d));
+}
+
+function normalizeArabic(s) {
+  if (s == null) return null;
+  let t = latinDigits(String(s))
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
+    .replace(/ئ/g, "ي")
+    .replace(/ؤ/g, "و")
+    .replace(/[ً-ٰٟـ]/g, "")
+    .toLowerCase();
+  t = t.replace(/\s+/g, " ").trim();
+  return t || null;
+}
+
+// --- Synonyms (normalized forms; every word in a group matches the others) --
+const SYNONYM_GROUPS = [
+  ["ايفون", "iphone", "ايفونات", "آيفون"],
+  ["سامسونج", "سامسونق", "samsung", "جالكسي", "جلاكسي", "galaxy"],
+  ["بلايستيشن", "بلاستيشن", "بلي", "playstation", "ps"],
+  ["ps5", "بلايستيشن 5", "بلاستيشن 5", "بلي 5"],
+  ["ps4", "بلايستيشن 4", "بلاستيشن 4", "بلي 4"],
+  ["اكس بوكس", "اكسبوكس", "xbox"],
+  ["لابتوب", "لاب توب", "laptop", "نوت بوك", "notebook"],
+  ["ماك بوك", "ماكبوك", "macbook"],
+  ["ايباد", "ipad"],
+  ["كمبيوتر", "حاسب", "حاسوب", "pc", "بي سي"],
+  ["كرت شاشه", "كرت الشاشه", "gpu", "rtx", "كرت"],
+  ["جوال", "جوالات", "موبايل", "هاتف"],
+  ["سياره", "سيارات", "cars"],
+  ["شقه", "شقق"],
+  ["فيلا", "فلل", "فله"],
+  ["ارض", "اراضي"],
+  ["كنب", "كنبه", "كنبات", "كنابات"],
+  ["مكيف", "مكيفات", "سبليت", "split"],
+  ["غساله", "غسالات"],
+  ["ثلاجه", "ثلاجات"],
+  ["دباب", "دبابات", "موتور", "دراجه ناريه"],
+  ["تويوتا", "toyota"],
+  ["هيونداي", "هونداي", "hyundai"],
+  ["نيسان", "nissan"],
+  ["لكزس", "lexus"],
+  ["مرسيدس", "mercedes", "benz", "بنز"],
+  ["كامري", "camry"],
+  ["كيا", "kia"],
+  ["شيفروليه", "شفر", "شفرولية", "chevrolet"],
+  ["فورد", "ford"],
+  ["جمس", "gmc"],
+  ["هوندا", "honda"],
+  ["بي ام", "bmw", "بي ام دبليو"],
+  ["ابل", "apple"],
+  ["هواوي", "huawei"],
+  ["شاومي", "xiaomi", "redmi", "ريدمي"],
+];
+const SYNONYMS = new Map();
+for (const g of SYNONYM_GROUPS) {
+  const norm = g.map(normalizeArabic);
+  for (const w of norm) {
+    const set = SYNONYMS.get(w) || new Set();
+    norm.forEach((x) => set.add(x));
+    SYNONYMS.set(w, set);
+  }
+}
+
+// Words dropped from text search (normalized).
+const STOPWORDS = new Set([
+  "في", "من", "علي", "علي", "و", "او", "الي", "مع", "بدون", "اقل", "تحت",
+  "عن", "ابحث", "ابي", "ابغي", "ابغا", "ابغيه", "دور", "لي", "هذا", "هذه",
+  "التي", "الذي", "كم", "اي", "ما", "هو", "هي", "بين", "حتي", "كل", "غير",
+  "عبر", "لدي", "ان", "اذا", "لو", "قد", "اريد", "ودي", "عطني", "للبيع", "بيع",
+  "ريال", "رس", "sar", "the", "a", "for", "sale",
+]);
+
+// Variants of one query token: itself, without the "ال" prefix, attached
+// prepositions (بـ/لـ/و) removed, and synonyms. Used for OR-matching.
+function tokenVariants(token) {
+  const n = normalizeArabic(token);
+  if (!n) return [];
+  const out = new Set([n]);
+  const strip = (w) => {
+    if (/^(وال|بال|لل|كال|فال)/.test(w) && w.length >= 6) out.add(w.replace(/^(وال|بال|كال|فال)/, "").replace(/^لل/, ""));
+    if (/^ال/.test(w) && w.length >= 5) out.add(w.slice(2));
+  };
+  strip(n);
+  for (const v of [...out]) {
+    const syn = SYNONYMS.get(v);
+    if (syn) syn.forEach((s) => out.add(s));
+  }
+  return [...out].filter((v) => v.length >= 2);
+}
+
+// Split a query into meaningful tokens; multi-word synonyms ("لاب توب")
+// are kept together so they match as a phrase.
+function tokenize(q) {
+  const n = normalizeArabic(q || "") || "";
+  const words = n.split(/[\s،,؛;.!?؟()\[\]"'+\/\\-]+/).filter(Boolean);
+  const tokens = [];
+  for (let i = 0; i < words.length; i++) {
+    const pair = i + 1 < words.length ? words[i] + " " + words[i + 1] : null;
+    if (pair && SYNONYMS.has(pair)) { tokens.push(pair); i++; continue; }
+    const w = words[i];
+    if (STOPWORDS.has(w)) continue;
+    if (w.length < 2 && !/^\d$/.test(w)) continue;
+    if (!tokens.includes(w)) tokens.push(w);
+  }
+  return tokens;
+}
+
+// --- Known places ------------------------------------------------------------
+// Display name → region. Spelling variants resolve through normalizeArabic.
+const CITY_REGION = {
+  "الرياض": "منطقة الرياض", "الخرج": "منطقة الرياض", "الدوادمي": "منطقة الرياض",
+  "المجمعة": "منطقة الرياض", "الزلفي": "منطقة الرياض", "عفيف": "منطقة الرياض",
+  "وادي الدواسر": "منطقة الرياض", "الدرعية": "منطقة الرياض", "القويعية": "منطقة الرياض",
+  "شقراء": "منطقة الرياض", "حوطة بني تميم": "منطقة الرياض", "الأفلاج": "منطقة الرياض",
+  "جدة": "منطقة مكة المكرمة", "مكة": "منطقة مكة المكرمة", "الطائف": "منطقة مكة المكرمة",
+  "القنفذة": "منطقة مكة المكرمة", "الليث": "منطقة مكة المكرمة", "رابغ": "منطقة مكة المكرمة",
+  "الجموم": "منطقة مكة المكرمة", "خليص": "منطقة مكة المكرمة",
+  "المدينة": "منطقة المدينة المنورة", "ينبع": "منطقة المدينة المنورة", "العلا": "منطقة المدينة المنورة",
+  "بدر": "منطقة المدينة المنورة", "المهد": "منطقة المدينة المنورة",
+  "الدمام": "المنطقة الشرقية", "الخبر": "المنطقة الشرقية", "الظهران": "المنطقة الشرقية",
+  "الأحساء": "المنطقة الشرقية", "الجبيل": "المنطقة الشرقية", "حفر الباطن": "المنطقة الشرقية",
+  "الخفجي": "المنطقة الشرقية", "القطيف": "المنطقة الشرقية", "الشرقية": "المنطقة الشرقية",
+  "الهفوف": "المنطقة الشرقية", "المبرز": "المنطقة الشرقية", "رأس تنورة": "المنطقة الشرقية", "بقيق": "المنطقة الشرقية",
+  "أبها": "منطقة عسير", "خميس مشيط": "منطقة عسير", "بيشة": "منطقة عسير", "النماص": "منطقة عسير",
+  "محايل": "منطقة عسير", "أحد رفيدة": "منطقة عسير",
+  "تبوك": "منطقة تبوك", "ضباء": "منطقة تبوك", "الوجه": "منطقة تبوك", "أملج": "منطقة تبوك", "تيماء": "منطقة تبوك",
+  "بريدة": "منطقة القصيم", "عنيزة": "منطقة القصيم", "الرس": "منطقة القصيم", "البكيرية": "منطقة القصيم",
+  "المذنب": "منطقة القصيم", "البدائع": "منطقة القصيم", "القصيم": "منطقة القصيم",
+  "حائل": "منطقة حائل", "بقعاء": "منطقة حائل",
+  "جازان": "منطقة جازان", "صبيا": "منطقة جازان", "أبو عريش": "منطقة جازان", "صامطة": "منطقة جازان",
+  "نجران": "منطقة نجران", "شرورة": "منطقة نجران",
+  "الباحة": "منطقة الباحة", "بلجرشي": "منطقة الباحة",
+  "سكاكا": "منطقة الجوف", "دومة الجندل": "منطقة الجوف", "القريات": "منطقة الجوف", "الجوف": "منطقة الجوف",
+  "عرعر": "منطقة الحدود الشمالية", "رفحاء": "منطقة الحدود الشمالية", "طريف": "منطقة الحدود الشمالية",
+};
+// Extra spellings people type → display name.
+const CITY_ALIASES = {
+  "الرياض": ["رياض", "riyadh"], "جدة": ["جده", "jeddah", "جدا"], "مكة": ["مكه", "مكة المكرمة", "makkah", "mecca"],
+  "المدينة": ["المدينة المنورة", "المدينه المنوره", "madinah", "medina"], "الدمام": ["دمام", "dammam"],
+  "الخبر": ["khobar"], "الأحساء": ["الاحسا", "الحسا", "hasa"], "الطائف": ["الطايف", "طايف", "taif"],
+  "أبها": ["ابها", "abha"], "تبوك": ["tabuk"], "بريدة": ["buraydah"], "حائل": ["حايل", "hail"],
+  "جازان": ["جيزان", "jazan"], "نجران": ["najran"], "خميس مشيط": ["خميس", "khamis"],
+};
+const CITY_INDEX = []; // [{norm, city}] longest first for greedy matching
+for (const city of Object.keys(CITY_REGION)) {
+  const names = [city, ...(CITY_ALIASES[city] || [])];
+  for (const n of names) CITY_INDEX.push({ norm: normalizeArabic(n), city });
+}
+CITY_INDEX.sort((a, b) => b.norm.length - a.norm.length);
+const REGION_BY_NORM = new Map();
+for (const [city, region] of Object.entries(CITY_REGION)) {
+  REGION_BY_NORM.set(normalizeArabic(city), region);
+  for (const a of CITY_ALIASES[city] || []) REGION_BY_NORM.set(normalizeArabic(a), region);
+}
+
+function cityToRegion(city) {
+  const n = normalizeArabic(city);
+  return (n && REGION_BY_NORM.get(n)) || null;
+}
+
+// Canonical display name for a typed city ("جده" → "جدة"), else null.
+function canonicalCity(city) {
+  const n = normalizeArabic(city);
+  if (!n) return null;
+  const hit = CITY_INDEX.find((c) => c.norm === n);
+  return hit ? hit.city : null;
+}
+
+// --- Numbers ---------------------------------------------------------------
+// "5 الاف" / "5الف" / "5k" / "5,000" / "٥٠٠٠" / "2.5 مليون" → integer.
+const NUM = String.raw`(\d[\d,]*(?:\.\d+)?)\s*(الف|الاف|آلاف|k|ك|مليون|m)?`;
+function toAmount(num, unit) {
+  let n = parseFloat(String(num).replace(/,/g, ""));
+  if (!Number.isFinite(n)) return null;
+  const u = (unit || "").toLowerCase();
+  if (/^(الف|الاف|آلاف|k|ك)$/.test(u)) n *= 1000;
+  else if (/^(مليون|m)$/.test(u)) n *= 1e6;
+  return Math.round(n);
+}
+
+// Parse a price from any listing price string ("79,996", "1,200.50 ريال").
+function parsePrice(v) {
+  if (v == null) return null;
+  const m = latinDigits(String(v)).replace(/,/g, "").match(/\d+(?:\.\d+)?/);
+  if (!m) return null;
+  const n = Math.round(parseFloat(m[0]));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+// --- Rule-based natural-language parser --------------------------------------
+const FILLERS = [
+  "ابحث لي عن", "ابحث عن", "دور لي على", "دور لي علي", "دور لي", "دور على", "دور علي",
+  "ابي", "ابغى", "ابغي", "ابغا", "اريد", "ودي ب", "ودي", "عطني", "ابحث", "دور", "ابيع",
+  "i want", "looking for", "find me", "search for",
+];
+
+function parseQueryRules(input) {
+  const raw = String(input || "").trim();
+  let s = " " + (normalizeArabic(raw) || "") + " ";
+  const out = { keyword: "", city: null, minPrice: null, maxPrice: null, sort: null, exclude: [], raw };
+
+  // Excluded words: "ايفون -مكسور -قطع" (a dash glued to a non-digit word).
+  out.exclude = latinDigits(raw).split(/\s+/).filter((w) => /^-[^\s\d-]/.test(w)).map((w) => w.slice(1));
+  s = s.replace(/(^|\s)-[^\s\d-]\S*/g, " ");
+
+  const take = (re, fn) => {
+    const m = s.match(re);
+    if (!m) return false;
+    fn(m);
+    s = s.replace(m[0], " ");
+    return true;
+  };
+
+  // Ranges first: "بين 1000 و 3000", "من 1000 الى 3000", "1000-3000".
+  take(new RegExp(String.raw`\s(?:بسعر\s+)?(?:بين|من)\s+${NUM}\s*(?:و|الي|الى|لين|-|ل)\s*${NUM}\s`), (m) => {
+    out.minPrice = toAmount(m[1], m[2]); out.maxPrice = toAmount(m[3], m[4] || m[2]);
+  }) ||
+  take(new RegExp(String.raw`\s${NUM}\s*-\s*${NUM}\s*(?:ريال|رس|sar)?\s`), (m) => {
+    out.minPrice = toAmount(m[1], m[2]); out.maxPrice = toAmount(m[3], m[4] || m[2]);
+  });
+  // Upper bound: "اقل من", "تحت", "ما يتعدى", "حد اقصى", "max", "<".
+  take(new RegExp(String.raw`\s(?:ب|بسعر\s+)?(?:اقل\s+من|ارخص\s+من|تحت|دون|ما\s+يتعدي|ما\s+يزيد\s+عن|لا\s+يزيد\s+عن|حد\s+اقصي|بحدود|max|under|below|<)\s*${NUM}\s*(?:ريال|رس|sar)?\s`), (m) => {
+    out.maxPrice = toAmount(m[1], m[2]);
+  });
+  // Lower bound: "اكثر من", "فوق", "min", ">".
+  take(new RegExp(String.raw`\s(?:ب|بسعر\s+)?(?:اكثر\s+من|اعلي\s+من|فوق|min|over|above|>)\s*${NUM}\s*(?:ريال|رس|sar)?\s`), (m) => {
+    out.minPrice = toAmount(m[1], m[2]);
+  });
+  // Bare budget: "بـ 2000 ريال", "ب 5 الاف"
+  if (out.maxPrice == null) {
+    take(new RegExp(String.raw`\s(?:ب|بسعر|سعر|ميزانيتي|ميزانيه)\s*${NUM}\s*(?:ريال|رس|sar)?\s`), (m) => {
+      out.maxPrice = toAmount(m[1], m[2]);
+    });
+  }
+  // Sort hints.
+  take(/\s(الارخص|ارخص|رخيص|رخيصه|cheap|cheapest)\s/, () => { out.sort = "price_asc"; });
+  take(/\s(الاحدث|احدث|جديد اليوم|latest|newest)\s/, () => { out.sort = "newest"; });
+
+  // City: greedy match of known names, optionally prefixed by في/ب/بـ.
+  for (const c of CITY_INDEX) {
+    const re = new RegExp(`\\s(?:في\\s+|ب|بـ|في|ف\\s+)?${c.norm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s`);
+    if (re.test(s)) { out.city = c.city; s = s.replace(re, " "); break; }
+  }
+
+  // Filler verbs at the start, then tidy.
+  s = s.replace(/\s+/g, " ").trim();
+  for (const f of FILLERS) {
+    const nf = normalizeArabic(f);
+    if (s === nf) { s = ""; break; }
+    if (s.startsWith(nf + " ")) { s = s.slice(nf.length + 1); break; }
+  }
+  s = s.replace(/^(عن|على|علي)\s+/, "").replace(/\s(في|ب|من|شي|شيء)$/, "").trim();
+  out.keyword = restoreSpelling(s, raw);
+  return out;
+}
+
+// Map normalized keyword words back to how the user typed them
+// ("شقه" → "شقة") so Haraj receives natural spelling.
+function restoreSpelling(normKeyword, raw) {
+  if (!normKeyword) return "";
+  const rawWords = latinDigits(raw).split(/\s+/).filter(Boolean);
+  let from = 0;
+  return normKeyword.split(" ").map((w) => {
+    for (let i = from; i < rawWords.length; i++) {
+      if (normalizeArabic(rawWords[i]) === w) { from = i + 1; return rawWords[i]; }
+    }
+    return w;
+  }).join(" ");
+}
+
+// --- Optional AI parser (Claude) ------------------------------------------------
+const AI_MODEL = process.env.HARAJ_AI_MODEL || "claude-haiku-5-5";
+function aiEnabled() {
+  return Boolean(process.env.ANTHROPIC_API_KEY);
+}
+
+async function parseQueryAI(input, { timeoutMs = 8000 } = {}) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      signal: ctrl.signal,
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        max_tokens: 300,
+        system:
+          "You turn a shopper's request for the Saudi classifieds site Haraj into search filters. " +
+          "Reply with ONLY a JSON object: {\"keyword\": short Arabic or brand search phrase as Haraj sellers would write it, " +
+          "\"alternatives\": up to 4 other spellings/synonyms sellers use (Arabic and English), " +
+          "\"city\": Saudi city in Arabic or null, \"minPrice\": number or null, \"maxPrice\": number or null, " +
+          "\"sort\": \"price_asc\" | \"newest\" | null}. Prices are in SAR; 'الف' means thousand.",
+        messages: [{ role: "user", content: String(input).slice(0, 300) }],
+      }),
+    });
+    if (!res.ok) throw new Error("AI HTTP " + res.status);
+    const data = await res.json();
+    const text = (data.content || []).map((c) => c.text || "").join("");
+    const json = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+    const num = (v) => (v == null || v === "" ? null : Number.isFinite(Number(v)) ? Math.round(Number(v)) : null);
+    return {
+      keyword: String(json.keyword || "").trim(),
+      alternatives: Array.isArray(json.alternatives) ? json.alternatives.map(String).slice(0, 4) : [],
+      city: json.city ? canonicalCity(json.city) || String(json.city) : null,
+      minPrice: num(json.minPrice),
+      maxPrice: num(json.maxPrice),
+      sort: json.sort === "price_asc" || json.sort === "newest" ? json.sort : null,
+      raw: String(input),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Parse with AI when configured (and asked), rules otherwise / on failure.
+async function parseQuery(input, { ai = false } = {}) {
+  const rules = parseQueryRules(input);
+  if (ai && aiEnabled()) {
+    try {
+      const r = await parseQueryAI(input);
+      if (r.keyword) return { ...r, exclude: rules.exclude, source: "ai" };
+    } catch (e) {
+      console.warn("[ai] parse failed, using rules:", e.message);
+    }
+  }
+  // Nothing left after extraction (e.g. "في جدة") → keep original text.
+  if (!rules.keyword) rules.keyword = rules.city || rules.minPrice || rules.maxPrice ? "" : rules.raw;
+  return { ...rules, alternatives: [], source: "rules" };
+}
+
+module.exports = {
+  normalizeArabic, latinDigits, tokenize, tokenVariants, STOPWORDS,
+  CITY_REGION, cityToRegion, canonicalCity, parsePrice,
+  parseQueryRules, parseQuery, aiEnabled,
+};

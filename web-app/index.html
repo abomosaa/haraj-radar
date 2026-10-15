@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>رادار حراج</title>
+  <meta name="description" content="ابحث في حراج بجملة عادية، واحفظ بحثك لتصلك الإعلانات الجديدة أول بأول." />
+  <meta name="theme-color" content="#F3F4F7" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#12141B" media="(prefers-color-scheme: dark)" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <a class="skip" href="#main" data-i18n="skip">تخطَّ إلى النتائج</a>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="./" aria-label="رادار حراج">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+          <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2" opacity=".35"/>
+          <circle cx="16" cy="16" r="8.5" fill="none" stroke="currentColor" stroke-width="2" opacity=".6"/>
+          <path d="M16 16 L16 2 A14 14 0 0 1 29 11 Z" fill="currentColor" opacity=".9"/>
+          <circle cx="22" cy="10" r="2.2" fill="var(--tag)"/>
+        </svg>
+        <span class="brand-name" data-i18n="brand">رادار حراج</span>
+      </a>
+
+      <form id="searchForm" class="search" role="search" autocomplete="off">
+        <label for="q" class="sr-only" data-i18n="searchLabel">ماذا تبحث عنه؟</label>
+        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input id="q" name="q" type="search" enterkeyhint="search" data-i18n-ph="searchPh" placeholder="ايفون 15 في جدة أقل من 3000" />
+        <button id="aiToggle" type="button" class="ai-toggle" aria-pressed="false" hidden data-i18n-title="aiTitle" title="فهم الطلب بالذكاء الاصطناعي">AI</button>
+        <button id="searchBtn" type="submit" class="btn btn-primary" data-i18n="searchBtn">ابحث في حراج</button>
+      </form>
+
+      <div class="top-actions">
+        <button id="radarPill" type="button" class="radar-pill" hidden>
+          <span class="radar-dot" aria-hidden="true"></span>
+          <span id="radarText"></span>
+        </button>
+        <button id="installBtn" type="button" class="btn btn-soft install-btn" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M5 20h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span data-i18n="install">ثبّت التطبيق</span>
+        </button>
+        <div class="appearance">
+          <button id="appearanceBtn" type="button" class="icon-btn" aria-haspopup="true" aria-expanded="false" data-i18n-aria="appearance" aria-label="المظهر">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.8 1.6-1.6 0-.5-.2-.8-.4-1.1-.3-.3-.4-.6-.4-1 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5C21 6.5 17 3 12 3z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="7.5" cy="11" r="1.4" fill="currentColor"/><circle cx="10" cy="7" r="1.4" fill="currentColor"/><circle cx="14.5" cy="7" r="1.4" fill="currentColor"/></svg>
+          </button>
+          <div id="appearanceMenu" class="popover" hidden>
+            <p class="pop-label" data-i18n="colorLabel">اللون</p>
+            <div class="swatches" role="radiogroup" data-i18n-aria="colorLabel" aria-label="اللون">
+              <button type="button" role="radio" data-accent="blue" style="--sw:#2B4ACB" data-i18n-aria="cBlue" aria-label="أزرق"></button>
+              <button type="button" role="radio" data-accent="violet" style="--sw:#6A3FC8" data-i18n-aria="cViolet" aria-label="بنفسجي"></button>
+              <button type="button" role="radio" data-accent="maroon" style="--sw:#A3283F" data-i18n-aria="cMaroon" aria-label="عنابي"></button>
+              <button type="button" role="radio" data-accent="orange" style="--sw:#C2410C" data-i18n-aria="cOrange" aria-label="برتقالي"></button>
+              <button type="button" role="radio" data-accent="teal" style="--sw:#0F6E7C" data-i18n-aria="cTeal" aria-label="فيروزي"></button>
+              <button type="button" role="radio" data-accent="graphite" style="--sw:#2A2F3A" data-i18n-aria="cGraphite" aria-label="رمادي"></button>
+            </div>
+            <p class="pop-label" data-i18n="modeLabel">الوضع</p>
+            <div class="seg" role="radiogroup" data-i18n-aria="modeLabel" aria-label="الوضع">
+              <button type="button" role="radio" data-theme-opt="auto" data-i18n="mAuto">تلقائي</button>
+              <button type="button" role="radio" data-theme-opt="light" data-i18n="mLight">فاتح</button>
+              <button type="button" role="radio" data-theme-opt="dark" data-i18n="mDark">داكن</button>
+            </div>
+          </div>
+        </div>
+        <button id="langBtn" type="button" class="icon-btn lang-btn" aria-label="Language">EN</button>
+      </div>
+    </div>
+
+    <nav class="tabs" aria-label="الأقسام">
+      <button class="tab is-active" data-tab="results" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
+        <span data-i18n="tabResults">الإعلانات</span>
+      </button>
+      <button class="tab" data-tab="watches" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6zM10 19a2 2 0 0 0 4 0"/></svg>
+        <span data-i18n="tabWatches">تنبيهاتي</span>
+        <span class="count-pill" id="watchBadge" hidden></span>
+      </button>
+      <button class="tab" data-tab="starred" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
+        <span data-i18n="tabStarred">المفضلة</span>
+      </button>
+      <button class="tab" data-tab="history" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+        <span data-i18n="tabHistory">السجل</span>
+      </button>
+    </nav>
+  </header>
+
+  <main id="main" class="shell">
+    <!-- ================= Results ================= -->
+    <section class="view is-active" data-view="results">
+      <aside id="filters" class="filters" aria-labelledby="filtersTitle">
+        <div class="sheet-head">
+          <h2 id="filtersTitle" data-i18n="filtersTitle">تصفية</h2>
+          <button id="closeFilters" type="button" class="icon-btn sheet-close" data-i18n-aria="close" aria-label="إغلاق">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <form id="filterForm" class="filter-form" autocomplete="off">
+          <div class="field f-wide">
+            <label for="location" data-i18n="locationLabel">المنطقة</label>
+            <select id="location" name="location"></select>
+          </div>
+          <div class="field">
+            <label for="city" data-i18n="cityLabel">المدينة</label>
+            <select id="city" name="city"></select>
+          </div>
+          <div class="field">
+            <label for="category" data-i18n="categoryLabel">القسم</label>
+            <select id="category" name="category"></select>
+          </div>
+          <fieldset class="field f-wide">
+            <legend data-i18n="priceLabel">السعر (ريال)</legend>
+            <div class="range">
+              <input id="minPrice" name="minPrice" type="number" min="0" inputmode="numeric" dir="ltr" data-i18n-ph="minPh" placeholder="من" aria-label="أقل سعر" />
+              <span aria-hidden="true">–</span>
+              <input id="maxPrice" name="maxPrice" type="number" min="0" inputmode="numeric" dir="ltr" data-i18n-ph="maxPh" placeholder="إلى" aria-label="أعلى سعر" />
+            </div>
+          </fieldset>
+          <div class="field">
+            <label for="exclude" data-i18n="excludeLabel">استبعد كلمات</label>
+            <input id="exclude" name="exclude" type="text" data-i18n-ph="excludePh" placeholder="مثال: مكسور، قطع" />
+          </div>
+          <div class="field">
+            <label for="timeframe" data-i18n="timeLabel">تاريخ الإعلان</label>
+            <select id="timeframe" name="timeframe">
+              <option value="any" data-i18n="tAny">أي وقت</option>
+              <option value="today" data-i18n="tToday">اليوم</option>
+              <option value="3" data-i18n="t3">آخر 3 أيام</option>
+              <option value="7" data-i18n="t7">آخر أسبوع</option>
+              <option value="30" data-i18n="t30">آخر شهر</option>
+            </select>
+          </div>
+          <div class="checks">
+            <label class="check"><input type="checkbox" id="hasPrice" name="hasPrice" /> <span data-i18n="hasPrice">بسعر محدد فقط</span></label>
+            <label class="check"><input type="checkbox" id="hasImage" name="hasImage" /> <span data-i18n="hasImage">بصور فقط</span></label>
+            <label class="check"><input type="checkbox" id="newOnly" name="newOnly" /> <span data-i18n="newOnly">الجديد فقط</span></label>
+            <label class="check"><input type="checkbox" id="priceDrop" name="priceDrop" /> <span data-i18n="priceDrop">نزل سعرها</span></label>
+          </div>
+          <div class="filter-actions">
+            <button type="button" id="clearFilters" class="btn btn-ghost" data-i18n="clearFilters">مسح التصفية</button>
+            <button type="button" id="applyFilters" class="btn btn-primary sheet-only" data-i18n="showResults">عرض النتائج</button>
+          </div>
+        </form>
+      </aside>
+      <div class="scrim" id="scrim" hidden></div>
+
+      <div class="results">
+        <div id="queryBar" class="query-bar" hidden>
+          <div class="chips" id="chips"></div>
+          <button id="watchThis" type="button" class="btn btn-bell">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6zM10 19a2 2 0 0 0 4 0"/></svg>
+            <span data-i18n="watchThis">نبّهني بالجديد</span>
+          </button>
+        </div>
+
+        <div class="toolbar">
+          <h1 id="resultsTitle" class="results-title" data-i18n="latest">أحدث ما رصدناه</h1>
+          <p id="resultCount" class="result-count" aria-live="polite"></p>
+          <div class="toolbar-actions">
+            <button id="openFilters" type="button" class="btn btn-soft filters-btn">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              <span data-i18n="filtersBtn">تصفية</span>
+              <span id="filterCount" class="count-pill" hidden></span>
+            </button>
+            <label class="sr-only" for="sort" data-i18n="sortLabel">الترتيب</label>
+            <select id="sort" class="select-soft">
+              <option value="" data-i18n="sortAuto">الأنسب</option>
+              <option value="newest" data-i18n="sortNewest">الأحدث</option>
+              <option value="price_asc" data-i18n="sortCheap">الأرخص</option>
+              <option value="price_desc" data-i18n="sortExpensive">الأغلى</option>
+            </select>
+            <div class="view-switch" role="group" data-i18n-aria="viewAria" aria-label="طريقة العرض">
+              <button type="button" data-view-mode="grid" class="is-active" data-i18n-aria="gridView" aria-label="بطاقات"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></button>
+              <button type="button" data-view-mode="list" data-i18n-aria="listView" aria-label="قائمة"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" stroke-width="2" stroke-linecap="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+
+        <p id="status" class="status" role="status" aria-live="polite" hidden></p>
+
+        <div id="examples" class="examples" hidden>
+          <p data-i18n="examplesLead">اكتب طلبك كما تقوله لصاحبك، ونفهم منه المدينة والسعر:</p>
+          <div class="example-list"></div>
+        </div>
+
+        <div id="grid" class="grid" aria-busy="false"></div>
+
+        <div class="more">
+          <button id="moreBtn" type="button" class="btn btn-soft" hidden data-i18n="more">عرض المزيد</button>
+          <button id="moreHarajBtn" type="button" class="btn btn-soft" hidden data-i18n="moreHaraj">جلب المزيد من حراج</button>
+          <button id="seenAllBtn" type="button" class="btn btn-ghost" hidden data-i18n="seenAll">اعتبر الكل مشاهَداً</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= Watches ================= -->
+    <section class="view" data-view="watches" hidden>
+      <div class="page-narrow">
+        <h1 class="page-title" data-i18n="watchesTitle">تنبيهاتي</h1>
+        <p class="page-lead" data-i18n="watchesLead">احفظ أي بحث، ونفحص حراج كل نصف ساعة. يصلك إشعار بالإعلانات الجديدة فقط، وإذا نزل سعر إعلان تتابعه.</p>
+
+        <form id="watchForm" class="watch-form" autocomplete="off">
+          <label for="watchQ" class="sr-only" data-i18n="watchQLabel">نبّهني عن</label>
+          <input id="watchQ" type="text" data-i18n-ph="watchPh" placeholder="مثال: كامري 2020 في الرياض بين 40 و 60 ألف" />
+          <button type="submit" class="btn btn-primary" data-i18n="addWatch">أضف التنبيه</button>
+        </form>
+
+        <div id="pushCard" class="push-card">
+          <div>
+            <h2 data-i18n="pushTitle">إشعارات هذا الجهاز</h2>
+            <p id="pushText" data-i18n="pushOffText">فعّلها ليصلك التنبيه حتى والتطبيق مغلق.</p>
+          </div>
+          <div class="push-actions">
+            <button id="pushBtn" type="button" class="btn btn-primary" data-i18n="pushOn">فعّل الإشعارات</button>
+            <button id="pushTestBtn" type="button" class="btn btn-ghost" hidden data-i18n="pushTest">أرسل إشعار تجربة</button>
+          </div>
+        </div>
+
+        <div class="schedule-card">
+          <div class="schedule-row">
+            <label for="checkEvery" data-i18n="checkEvery">افحص حراج كل</label>
+            <select id="checkEvery" class="select-soft">
+              <option value="10" data-i18n="m10">10 دقائق</option>
+              <option value="15" data-i18n="m15">15 دقيقة</option>
+              <option value="30" data-i18n="m30">30 دقيقة</option>
+              <option value="60" data-i18n="m60">ساعة</option>
+              <option value="120" data-i18n="m120">ساعتين</option>
+            </select>
+            <p id="scheduleText" class="schedule-text"></p>
+          </div>
+          <div class="quiet-row">
+            <label class="check"><input type="checkbox" id="quietOn" /> <span data-i18n="quietLabel">ساعات الهدوء</span></label>
+            <span data-i18n="quietFrom">من</span>
+            <select id="quietFrom" class="select-soft quiet-sel" aria-label="من"></select>
+            <span data-i18n="quietTo">إلى</span>
+            <select id="quietTo" class="select-soft quiet-sel" aria-label="إلى"></select>
+            <p class="quiet-hint" data-i18n="quietHint">لا تصلك إشعارات في هذه الساعات، ويصلك ملخص بما فاتك بعدها.</p>
+          </div>
+          <details class="how">
+            <summary data-i18n="howTitle">كيف تعمل التنبيهات؟</summary>
+            <ol>
+              <li data-i18n="how1">إذا حفظت بحث، نحفظ الإعلانات الموجودة حالياً عشان ما توصلك تنبيهات عن القديم.</li>
+              <li data-i18n="how2">وقت الفحص، نبحث عن الجديد ونكمل حتى 3 صفحات إذا لسه الإعلانات جديدة.</li>
+              <li data-i18n="how3">أي إعلان جديد يناسب مدينتك وسعرك يوصلك عنه تنبيه، وحتى لو نزل سعر إعلان تتابعه. وتقدر تشوف كل التنبيهات في «تنبيهاتي».</li>
+              <li data-i18n="how4">الفحص يصير على جهازك، فلازم تخلي نافذة «تشغيل رادار حراج» مفتوحة والجهاز شغال وما يدخل وضع السكون.</li>
+            </ol>
+          </details>
+        </div>
+
+        <div class="list-head">
+          <h2 data-i18n="savedSearches">عمليات البحث المحفوظة</h2>
+          <button id="runAllBtn" type="button" class="btn btn-soft" data-i18n="runAll">افحص الكل الآن</button>
+        </div>
+        <ul id="watchList" class="watch-list"></ul>
+
+        <div class="list-head blocked-head">
+          <h2 data-i18n="blockedTitle">البائعون المخفيون</h2>
+        </div>
+        <ul id="blockedList" class="blocked-list"></ul>
+      </div>
+    </section>
+
+    <!-- ================= Starred ================= -->
+    <section class="view" data-view="starred" hidden>
+      <div class="page-wide">
+        <h1 class="page-title" data-i18n="starredTitle">المفضلة</h1>
+        <p class="page-lead" data-i18n="starredLead">الإعلانات التي حفظتها بالنجمة. نتابع أسعارها كلما ظهرت في البحث.</p>
+        <div id="starGrid" class="grid"></div>
+      </div>
+    </section>
+
+    <!-- ================= History ================= -->
+    <section class="view" data-view="history" hidden>
+      <div class="page-narrow">
+        <h1 class="page-title" data-i18n="historyTitle">السجل</h1>
+        <div id="stats" class="stats"></div>
+        <div class="list-head">
+          <h2 data-i18n="runsTitle">آخر عمليات الجلب من حراج</h2>
+          <button id="refreshHistory" type="button" class="btn btn-soft" data-i18n="refresh">تحديث</button>
+        </div>
+        <ol id="runList" class="run-list"></ol>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="details" class="details" aria-labelledby="dTitle">
+    <div class="d-shell">
+      <button type="button" class="icon-btn d-close" id="dClose" data-i18n-aria="close" aria-label="إغلاق">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <div class="d-gallery">
+        <div class="d-track" id="dTrack"></div>
+        <button type="button" class="d-nav d-prev" id="dPrev" aria-label="السابق"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button type="button" class="d-nav d-next" id="dNext" aria-label="التالي"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <span class="d-counter" id="dCounter" dir="ltr"></span>
+      </div>
+      <div class="d-info">
+        <span class="tag d-tag" id="dTag"><span class="tag-hole" aria-hidden="true"></span><span class="tag-text"></span></span>
+        <h2 id="dTitle" class="d-title" dir="auto"></h2>
+        <p class="drop" id="dDrop" hidden></p>
+        <p class="card-meta d-meta">
+          <span class="m-place" id="dPlace"></span>
+          <span class="m-time" id="dTime"></span>
+          <span class="m-seller" id="dSeller"></span>
+        </p>
+        <p class="d-tags" id="dTags"></p>
+        <p class="d-status" id="dStatus" hidden></p>
+        <div class="d-desc" id="dDesc" dir="auto"></div>
+        <p class="d-privacy" data-i18n="dPrivacy">أرقام التواصل مخفية. للتواصل مع البائع افتح الإعلان في حراج.</p>
+        <div class="d-actions">
+          <a id="dOpen" class="btn btn-primary" target="_blank" rel="noopener noreferrer" data-i18n="dOpen">افتح في حراج للتواصل</a>
+          <button id="dStar" type="button" class="btn btn-soft"></button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <template id="cardTpl">
+    <article class="card">
+      <a class="card-media" target="_blank" rel="noopener noreferrer">
+        <img alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
+        <span class="media-fallback" aria-hidden="true"></span>
+        <span class="tag"><span class="tag-hole" aria-hidden="true"></span><span class="tag-text"></span></span>
+      </a>
+      <span class="badge-new"></span>
+      <div class="card-tools">
+        <button type="button" class="tool star" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+        <button type="button" class="tool hide"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="18.5" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg></button>
+      </div>
+      <div class="card-body">
+        <a class="card-title" dir="auto" target="_blank" rel="noopener noreferrer"></a>
+        <p class="drop" hidden></p>
+        <p class="card-meta">
+          <span class="m-place"></span>
+          <span class="m-time"></span>
+        </p>
+        <p class="card-sub">
+          <span class="m-cat"></span>
+          <span class="m-seller"></span>
+        </p>
+      </div>
+    </article>
+  </template>
+
+  <script src="./query.js" defer></script>
+  <script src="./local-api.js" defer></script>
+  <script src="./app.js" defer></script>
+</body>
+</html>

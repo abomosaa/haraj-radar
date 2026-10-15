@@ -6,12 +6,12 @@
 - **`server/`** — الواجهة الخلفية (FastAPI + سكرابر Playwright) تعمل على الخادم.
 - **`pwa/`** — واجهة الويب والتطبيق التقدمي (PWA) التي تتثبت من المتصفح بزر «إضافة إلى الشاشة الرئيسية».
 
-للمتصفح
+Website
 
 <img width="1861" height="867" alt="image" src="https://github.com/user-attachments/assets/11312e62-d028-4740-b455-c06f0b31c348" />
 
 
-وللجوال
+Mobile
 
 
 <img width="252" height="571" alt="image" src="https://github.com/user-attachments/assets/156c0d2a-b89d-4d69-8b57-50f03b9d56c9" />

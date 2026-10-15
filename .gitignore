@@ -8,3 +8,5 @@ results.json
 node_modules/
 express-app/data/
 express-app/test/*.db
+
+.openchamber/
